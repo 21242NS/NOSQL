@@ -1,0 +1,6 @@
+{
+  "_id": ObjectId,
+  "name": "Alice",
+  "email": "alice@example.com",
+  "joined": "2025-09-30"
+}

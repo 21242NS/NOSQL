@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<personne id="P123" genre="masculin"
+          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+          xsi:noNamespaceSchemaLocation="personne.xsd">
+    <nom>Durand</nom>
+    <prenom>Jean</prenom>
+    <age>35</age>
+    <profession>Développeur web</profession>
+</personne>

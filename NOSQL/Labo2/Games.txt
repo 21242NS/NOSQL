@@ -1,0 +1,9 @@
+{
+  "_id": ObjectId,
+  "title": "The Legend of Zelda",
+  "genre": "Adventure",
+  "release_year": 2017,
+  "platforms": ["Nintendo Switch"],
+  "price": 59.99,
+  "quantity": 10
+}

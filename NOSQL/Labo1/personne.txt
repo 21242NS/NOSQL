@@ -1,0 +1,11 @@
+<!ELEMENT personne (nom, prenom, age, profession)>
+
+<!ELEMENT nom (#PCDATA)>
+<!ELEMENT prenom (#PCDATA)>
+<!ELEMENT age (#PCDATA)>
+<!ELEMENT profession (#PCDATA)>
+
+<!ATTLIST personne
+    id      CDATA       #REQUIRED
+    genre   (masculin | feminin | autre)    #REQUIRED
+>

@@ -1,0 +1,133 @@
+<?xml version='1.0' encoding='utf-8'?>
+<collection>
+  <book id="bk001">
+    <title>XML for Beginners</title>
+    <author>Jane Smith</author>
+    <year>2010</year>
+  </book>
+  <book id="bk002">
+    <title>Advanced Python</title>
+    <author>John Doe</author>
+    <year>2022</year>
+  </book>
+  <book id="bk003">
+    <title>Learning Java</title>
+    <author>Emily Clark</author>
+    <year>2015</year>
+  </book>
+  <book id="bk004">
+    <title>Data Science Essentials</title>
+    <author>Michael Brown</author>
+    <year>2018</year>
+  </book>
+  <book id="bk005">
+    <title>Machine Learning Basics</title>
+    <author>Linda Green</author>
+    <year>2019</year>
+  </book>
+  <book id="bk006">
+    <title>Deep Learning Explained</title>
+    <author>Chris White</author>
+    <year>2020</year>
+  </book>
+  <book id="bk007">
+    <title>Introduction to Databases</title>
+    <author>Sarah Black</author>
+    <year>2012</year>
+  </book>
+  <book id="bk008">
+    <title>Big Data Analytics</title>
+    <author>David Lee</author>
+    <year>2017</year>
+  </book>
+  <book id="bk009">
+    <title>Web Development with JavaScript</title>
+    <author>Anna Scott</author>
+    <year>2016</year>
+  </book>
+  <book id="bk010">
+    <title>HTML &amp; CSS Design</title>
+    <author>Paul Walker</author>
+    <year>2013</year>
+  </book>
+  <book id="bk011">
+    <title>Programming in C++</title>
+    <author>Olivia King</author>
+    <year>2011</year>
+  </book>
+  <book id="bk012">
+    <title>Algorithms Unlocked</title>
+    <author>James Hall</author>
+    <year>2014</year>
+  </book>
+  <book id="bk013">
+    <title>Network Security</title>
+    <author>Patricia Young</author>
+    <year>2019</year>
+  </book>
+  <book id="bk014">
+    <title>Cloud Computing Guide</title>
+    <author>Robert Adams</author>
+    <year>2021</year>
+  </book>
+  <book id="bk015">
+    <title>Operating Systems Concepts</title>
+    <author>Jessica Turner</author>
+    <year>2016</year>
+  </book>
+  <book id="bk016">
+    <title>Mobile App Development</title>
+    <author>Brian Harris</author>
+    <year>2018</year>
+  </book>
+  <book id="bk017">
+    <title>Software Engineering</title>
+    <author>Laura Martin</author>
+    <year>2017</year>
+  </book>
+  <book id="bk018">
+    <title>Artificial Intelligence</title>
+    <author>Steven Clark</author>
+    <year>2020</year>
+  </book>
+  <book id="bk019">
+    <title>Blockchain Basics</title>
+    <author>Rachel Lewis</author>
+    <year>2022</year>
+  </book>
+  <book id="bk020">
+    <title>Computer Graphics</title>
+    <author>Kevin Allen</author>
+    <year>2015</year>
+  </book>
+  <book id="bk021">
+    <title>Game Development</title>
+    <author>Emma Nelson</author>
+    <year>2013</year>
+  </book>
+  <book id="bk022">
+    <title>Functional Programming</title>
+    <author>Matthew Perez</author>
+    <year>2014</year>
+  </book>
+  <book id="bk023">
+    <title>Parallel Computing</title>
+    <author>Grace Evans</author>
+    <year>2018</year>
+  </book>
+  <book id="bk024">
+    <title>Quantum Computing</title>
+    <author>Daniel Baker</author>
+    <year>2021</year>
+  </book>
+  <book id="bk025">
+    <title>Information Retrieval</title>
+    <author>Victoria Carter</author>
+    <year>2012</year>
+  </book>
+  <book id="bk026">
+    <title>Artificial Intelligence, A Modern Approach</title>
+    <author>Stuart Russell and Peter Norvig</author>
+    <year>2025</year>
+  </book>
+</collection>
