@@ -1,16 +1,18 @@
 import requests
+import time
 
-BASE = "http://127.0.0.1:5000/api/games"
+import os
+BASE = os.getenv("BASE", "http://flask-app:5000/api/games")
 
 def test_post():
     data = {
-            "title": "The Legend of Zelda",
-            "genre": "Adventure",
-            "release_year": 2017,
-            "platforms": ["Nintendo Switch"],
-            "price": 59.99,
-            "quantity": 10
-        }
+        "title": "The Legend of Zelda",
+        "genre": "Adventure",
+        "release_year": 2017,
+        "platforms": ["Nintendo Switch"],
+        "price": 59.99,
+        "quantity": 10
+    }
     r = requests.post(BASE, json=data)
     print("POST:", r.status_code)
     try:
@@ -19,13 +21,18 @@ def test_post():
     except Exception:
         print("Raw response:", r.text)
         return None
+
 def test_get_all():
+    start = time.time()
     r = requests.get(BASE)
-    print("GET ALL:", r.status_code, r.json())
+    elapsed = time.time() - start
+    print(f"GET ALL: {r.status_code} {r.json()} (time: {elapsed:.4f}s)")
 
 def test_get_one(game_id):
+    start = time.time()
     r = requests.get(f"{BASE}/{game_id}")
-    print("GET ONE:", r.status_code, r.json())
+    elapsed = time.time() - start
+    print(f"GET ONE: {r.status_code} {r.json()} (time: {elapsed:.4f}s)")
 
 def test_put(game_id):
     data = {"price": 49.99, "quantity": 5}
@@ -38,10 +45,11 @@ def test_delete(game_id):
 
 if __name__ == "__main__":
     game_id = test_post()
-    test_get_all()
+    test_get_all()      # 1ère requête (cache miss)
+    test_get_all()      # 2ème requête (cache hit, plus rapide)
     if game_id:
-        test_get_one(game_id)
-        test_put(game_id)
-        test_get_one(game_id)
-        # test_delete(game_id)
-        test_get_all()
+        test_get_one(game_id)  # 1ère requête (cache miss)
+        test_get_one(game_id)  # 2ème requête (cache hit, plus rapide)
+        test_put(game_id)      # modifie le jeu, invalide le cache
+        test_get_one(game_id)  # cache miss après update
+        test_get_all()         # cache miss après update

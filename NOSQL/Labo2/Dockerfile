@@ -6,6 +6,8 @@ WORKDIR /app
 
 COPY Exo4.py . 
 COPY requirements.txt .
+COPY cache.py .
+COPY test_exo4.py .
 
 
 RUN pip install --no-cache-dir -r requirements.txt
