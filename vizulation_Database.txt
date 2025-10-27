@@ -1,0 +1,65 @@
+users
+ ├── creances
+ ├── dettes
+ └── argent_recolte
+     │
+     ├──< transactions (liées par user_id)
+     │      └── categories
+     │
+     ├──< reports (par période)
+     └──< notifications
+admins (séparé)
+//
+user{
+  "_id": ObjectId("..."),
+  "first_name": "Lucas",
+  "last_name": "Dupont",
+  "email": "lucas.dupont@example.com",
+  "phone": "+32471234567",
+
+  "creances": 300.0,
+  "dettes": 150.0,
+  "argent_recolte": 200.0,   // total encaissé (ex: créances - dettes)
+
+  "created_at": "2025-10-27T14:30:00Z",
+  "updated_at": "2025-10-27T14:30:00Z"
+}
+transactions{
+  "_id": ObjectId("..."),
+  "user_id": ObjectId("..."),
+  "category_id": ObjectId("..."),
+  "relation_type": "creance",   // "creance" ou "dette"
+  "type": "credit",             // "credit" (ajout) ou "debit" (retrait)
+  "amount": 50.0,
+  "description": "Remboursement d’un prêt",
+  "date": "2025-10-27T10:00:00Z"
+}
+categories{
+  "_id": ObjectId("..."),
+  "name": "Prêt",
+  "description": "Montant prêté à un utilisateur"
+}
+admins{
+  "_id": ObjectId("..."),
+  "username": "admin",
+  "password_hash": "hashé_avec_bcrypt",
+  "role": "superadmin"
+}
+reports{
+  "_id": ObjectId("..."),
+  "title": "Rapport du mois d’octobre",
+  "period_start": "2025-10-01T00:00:00Z",
+  "period_end": "2025-10-31T23:59:59Z",
+  "total_creances": 1520.0,
+  "total_dettes": 740.0,
+  "argent_recolte": 780.0,
+  "created_at": "2025-10-27T12:00:00Z"
+}
+notifications{
+  "_id": ObjectId("..."),
+  "user_id": ObjectId("..."),
+  "message": "Nouvelle créance ajoutée de 50€",
+  "type": "info",
+  "is_read": false,
+  "created_at": "2025-10-27T14:32:00Z"
+}
