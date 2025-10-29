@@ -1,0 +1,538 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Finance Tracker - Console</title>
+    <style>
+        :root {
+            color-scheme: light dark;
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        }
+        body {
+            margin: 0;
+            display: flex;
+            min-height: 100vh;
+            background: #1f2933;
+            color: #f5f7fa;
+        }
+        .app {
+            display: flex;
+            width: 100%;
+        }
+        aside {
+            width: 280px;
+            border-right: 1px solid rgba(255,255,255,0.12);
+            padding: 1.5rem;
+            background: #111b27;
+            box-sizing: border-box;
+        }
+        main {
+            flex: 1;
+            padding: 2rem;
+            box-sizing: border-box;
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
+        }
+        h1, h2, h3 {
+            margin: 0 0 1rem;
+            font-weight: 600;
+        }
+        button {
+            background: #3b82f6;
+            color: white;
+            border: none;
+            padding: 0.6rem 1rem;
+            border-radius: 6px;
+            font-size: 0.95rem;
+            cursor: pointer;
+            transition: background 0.2s ease;
+        }
+        button:hover {
+            background: #2563eb;
+        }
+        button.secondary {
+            background: #4b5563;
+        }
+        ul.user-list {
+            list-style: none;
+            padding: 0;
+            margin: 1.5rem 0 0;
+            display: flex;
+            flex-direction: column;
+            gap: 0.35rem;
+        }
+        ul.user-list li {
+            padding: 0.65rem 0.75rem;
+            border-radius: 6px;
+            background: rgba(255,255,255,0.04);
+            cursor: pointer;
+            transition: transform 0.1s ease, background 0.2s ease;
+        }
+        ul.user-list li:hover {
+            transform: translateY(-1px);
+            background: rgba(59,130,246,0.25);
+        }
+        ul.user-list li.active {
+            background: rgba(59,130,246,0.4);
+        }
+        .card {
+            background: rgba(17,27,39,0.85);
+            border-radius: 12px;
+            padding: 1.5rem;
+            box-shadow: 0 1px 4px rgba(0,0,0,0.3);
+        }
+        .card p {
+            margin: 0.35rem 0;
+        }
+        .muted {
+            color: rgba(255,255,255,0.6);
+        }
+        .badge {
+            display: inline-block;
+            padding: 0.3rem 0.6rem;
+            border-radius: 999px;
+            background: rgba(59,130,246,0.25);
+            font-size: 0.75rem;
+            margin-right: 0.35rem;
+        }
+        .transactions {
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+        }
+        .transaction-item {
+            background: rgba(15,23,42,0.85);
+            border-radius: 10px;
+            padding: 0.85rem;
+            border-left: 4px solid rgba(59,130,246,0.55);
+        }
+        .transaction-item.debit {
+            border-left-color: #f97316;
+        }
+        dialog {
+            border: none;
+            border-radius: 12px;
+            padding: 1.5rem;
+            background: #111b27;
+            color: inherit;
+            max-width: 420px;
+            width: 100%;
+        }
+        dialog::backdrop {
+            background: rgba(15,23,42,0.75);
+        }
+        form {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+        label {
+            display: flex;
+            flex-direction: column;
+            gap: 0.4rem;
+            font-size: 0.9rem;
+        }
+        input, textarea, select {
+            border-radius: 6px;
+            border: 1px solid rgba(255,255,255,0.2);
+            background: rgba(15,23,42,0.65);
+            color: inherit;
+            padding: 0.6rem;
+        }
+        .actions {
+            display: flex;
+            gap: 0.75rem;
+            justify-content: flex-end;
+        }
+        .empty-state {
+            text-align: center;
+            padding: 2rem 1rem;
+            border: 1px dashed rgba(255,255,255,0.2);
+            border-radius: 12px;
+        }
+        @media (max-width: 900px) {
+            body { flex-direction: column; }
+            aside { width: 100%; border-right: none; border-bottom: 1px solid rgba(255,255,255,0.12); }
+            main { padding: 1.25rem; }
+        }
+    </style>
+</head>
+<body>
+    <div class="app">
+        <aside>
+            <h2>Utilisateurs</h2>
+            <button id="open-add-user">Ajouter</button>
+            <ul id="user-list" class="user-list"></ul>
+        </aside>
+        <main>
+            <section id="user-overview" class="card">
+                <h1>Console de test</h1>
+                <p class="muted">
+                    Sélectionne un utilisateur pour afficher ses informations et enregistrer de nouvelles transactions.
+                    Utilise le bouton « Ajouter » pour créer un profil de test.
+                </p>
+            </section>
+            <section id="user-details" class="card" hidden>
+                <header style="display:flex;justify-content:space-between;align-items:center;">
+                    <div>
+                        <h2 id="user-name">Utilisateur</h2>
+                        <p id="user-email" class="muted"></p>
+                    </div>
+                    <button id="open-add-transaction">Ajouter une transaction</button>
+                </header>
+                <div id="user-meta">
+                    <p><span class="badge">Téléphone</span><span id="user-phone">-</span></p>
+                    <p><span class="badge">Créances</span><span id="user-creances">0</span></p>
+                    <p><span class="badge">Dettes</span><span id="user-dettes">0</span></p>
+                    <p><span class="badge">Argent récolté</span><span id="user-argent">0</span></p>
+                    <p class="muted" style="margin-top:0.75rem;">
+                        <strong>Créé le</strong> <span id="user-created"></span>
+                        &nbsp;•&nbsp;<strong>Mis à jour</strong> <span id="user-updated"></span>
+                    </p>
+                </div>
+                <div>
+                    <h3>Transactions</h3>
+                    <div id="transactions" class="transactions"></div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <dialog id="user-dialog">
+        <form id="user-form">
+            <h2>Nouvel utilisateur</h2>
+            <label>Prénom
+                <input type="text" name="first_name" required>
+            </label>
+            <label>Nom
+                <input type="text" name="last_name" required>
+            </label>
+            <label>Email
+                <input type="email" name="email" required>
+            </label>
+            <label>Téléphone
+                <input type="text" name="phone">
+            </label>
+            <label>Créances initiales
+                <input type="number" step="0.01" min="0" name="creances" value="0">
+            </label>
+            <label>Dettes initiales
+                <input type="number" step="0.01" min="0" name="dettes" value="0">
+            </label>
+            <label>Argent récolté
+                <input type="number" step="0.01" name="argent_recolte" placeholder="Laisse vide pour auto-calcul">
+            </label>
+            <div class="actions">
+                <button type="button" class="secondary" id="cancel-user">Annuler</button>
+                <button type="submit">Enregistrer</button>
+            </div>
+        </form>
+    </dialog>
+
+    <dialog id="transaction-dialog">
+        <form id="transaction-form">
+            <h2>Ajouter une transaction</h2>
+            <label>Type de relation
+                <select name="relation_type" required>
+                    <option value="creance">Créance</option>
+                    <option value="dette">Dette</option>
+                </select>
+            </label>
+            <label>Sens de la transaction
+                <select name="type" required>
+                    <option value="credit">Crédit (ajout)</option>
+                    <option value="debit">Débit (retrait)</option>
+                </select>
+            </label>
+            <label>Montant (€)
+                <input type="number" name="amount" min="0" step="0.01" required>
+            </label>
+            <label>Description
+                <textarea name="description" rows="3" placeholder="Ex: Remboursement partiel"></textarea>
+            </label>
+            <label>Catégorie (ID Mongo optionnel)
+                <input type="text" name="category_id" placeholder="5f... (optionnel)">
+            </label>
+            <label>Date
+                <input type="datetime-local" name="date">
+            </label>
+            <div class="actions">
+                <button type="button" class="secondary" id="cancel-transaction">Annuler</button>
+                <button type="submit">Valider</button>
+            </div>
+        </form>
+    </dialog>
+
+    <script>
+        const API_BASE_URL = (window.API_BASE_URL) || "http://localhost:5001/api";
+
+        const state = {
+            users: [],
+            selectedUserId: null,
+            transactionsByUser: new Map(),
+        };
+
+        const userListEl = document.getElementById("user-list");
+        const userDetailsSection = document.getElementById("user-details");
+        const userOverview = document.getElementById("user-overview");
+        const transactionsContainer = document.getElementById("transactions");
+        const userDialog = document.getElementById("user-dialog");
+        const userForm = document.getElementById("user-form");
+        const transactionDialog = document.getElementById("transaction-dialog");
+        const transactionForm = document.getElementById("transaction-form");
+
+        document.getElementById("open-add-user").addEventListener("click", () => {
+            userForm.reset();
+            userDialog.showModal();
+        });
+        document.getElementById("cancel-user").addEventListener("click", () => userDialog.close());
+        document.getElementById("open-add-transaction").addEventListener("click", () => {
+            if (!state.selectedUserId) return;
+            transactionForm.reset();
+            const now = new Date();
+            transactionForm.elements.date.value = toLocalInputDateTime(now);
+            transactionDialog.showModal();
+        });
+        document.getElementById("cancel-transaction").addEventListener("click", () => transactionDialog.close());
+
+        userForm.addEventListener("submit", async (event) => {
+            event.preventDefault();
+            const formData = new FormData(userForm);
+            const payload = Object.fromEntries(formData.entries());
+
+            payload.creances = parseNumberOrZero(payload.creances);
+            payload.dettes = parseNumberOrZero(payload.dettes);
+            if (payload.argent_recolte) {
+                payload.argent_recolte = parseNumberOrZero(payload.argent_recolte);
+            } else {
+                payload.argent_recolte = payload.creances - payload.dettes;
+            }
+            payload.created_at = new Date().toISOString();
+            payload.updated_at = payload.created_at;
+
+            try {
+                await apiFetch("/users", {
+                    method: "POST",
+                    body: JSON.stringify(payload),
+                });
+                userDialog.close();
+                await loadUsers();
+            } catch (error) {
+                alert("Erreur lors de la création : " + error.message);
+            }
+        });
+
+        transactionForm.addEventListener("submit", async (event) => {
+            event.preventDefault();
+            if (!state.selectedUserId) return;
+
+            const currentUser = state.users.find(u => u._id === state.selectedUserId);
+            if (!currentUser) {
+                alert("Utilisateur introuvable en mémoire.");
+                return;
+            }
+
+            const formData = new FormData(transactionForm);
+            const payload = {
+                transaction: {
+                    relation_type: formData.get("relation_type"),
+                    type: formData.get("type"),
+                    amount: parseNumberOrZero(formData.get("amount")),
+                    description: formData.get("description") || null,
+                }
+            };
+
+            const categoryId = formData.get("category_id");
+            if (categoryId) {
+                payload.transaction.category_id = categoryId.trim();
+            }
+            const dateValue = formData.get("date");
+            payload.transaction.date = dateValue ? new Date(dateValue).toISOString() : new Date().toISOString();
+
+            const updatedUserFields = computeUserTotals(currentUser, payload.transaction);
+            Object.assign(payload, updatedUserFields);
+
+            try {
+                await apiFetch(`/users/${state.selectedUserId}/transaction`, {
+                    method: "PUT",
+                    body: JSON.stringify(payload),
+                });
+                transactionDialog.close();
+
+                await Promise.all([
+                    refreshCurrentUser(),
+                    appendTransactionToState(state.selectedUserId, payload.transaction)
+                ]);
+            } catch (error) {
+                alert("Erreur lors de l'enregistrement : " + error.message);
+            }
+        });
+
+        async function loadUsers() {
+            const users = await apiFetch("/users");
+            state.users = users;
+            renderUserList();
+            if (state.selectedUserId) {
+                await refreshCurrentUser();
+            }
+        }
+
+        function renderUserList() {
+            userListEl.innerHTML = "";
+            if (!state.users.length) {
+                const empty = document.createElement("li");
+                empty.className = "muted";
+                empty.textContent = "Aucun utilisateur";
+                empty.style.cursor = "default";
+                userListEl.appendChild(empty);
+                userDetailsSection.hidden = true;
+                userOverview.hidden = false;
+                return;
+            }
+            state.users.forEach((user) => {
+                const li = document.createElement("li");
+                li.textContent = `${user.first_name ?? ""} ${user.last_name ?? ""}`.trim() || user.email;
+                if (user._id === state.selectedUserId) {
+                    li.classList.add("active");
+                }
+                li.addEventListener("click", () => selectUser(user._id));
+                userListEl.appendChild(li);
+            });
+        }
+
+        async function selectUser(userId) {
+            state.selectedUserId = userId;
+            renderUserList();
+            await refreshCurrentUser();
+        }
+
+        async function refreshCurrentUser() {
+            if (!state.selectedUserId) return;
+            try {
+                const user = await apiFetch(`/users/${state.selectedUserId}`);
+                updateUserDetails(user);
+                state.users = state.users.map(u => u._id === user._id ? user : u);
+
+                const storedTransactions = state.transactionsByUser.get(user._id) || [];
+                renderTransactions(storedTransactions);
+            } catch (error) {
+                alert("Impossible de charger l'utilisateur : " + error.message);
+            }
+        }
+
+        function updateUserDetails(user) {
+            userDetailsSection.hidden = false;
+            userOverview.hidden = true;
+
+            document.getElementById("user-name").textContent = `${user.first_name ?? ""} ${user.last_name ?? ""}`.trim() || "Profil";
+            document.getElementById("user-email").textContent = user.email || "Email inconnu";
+            document.getElementById("user-phone").textContent = user.phone || "—";
+            document.getElementById("user-creances").textContent = formatCurrency(user.creances);
+            document.getElementById("user-dettes").textContent = formatCurrency(user.dettes);
+            document.getElementById("user-argent").textContent = formatCurrency(user.argent_recolte);
+            document.getElementById("user-created").textContent = formatDate(user.created_at);
+            document.getElementById("user-updated").textContent = formatDate(user.updated_at);
+        }
+
+        function renderTransactions(transactions) {
+            transactionsContainer.innerHTML = "";
+            if (!transactions || transactions.length === 0) {
+                const empty = document.createElement("div");
+                empty.className = "empty-state";
+                empty.textContent = "Aucune transaction enregistrée pour le moment.";
+                transactionsContainer.appendChild(empty);
+                return;
+            }
+
+            transactions.slice().reverse().forEach((transaction) => {
+                const item = document.createElement("div");
+                item.className = `transaction-item ${transaction.type === "debit" ? "debit" : "credit"}`;
+                item.innerHTML = `
+                    <strong>${transaction.relation_type.toUpperCase()} • ${transaction.type.toUpperCase()}</strong>
+                    <p>Montant : ${formatCurrency(transaction.amount)}</p>
+                    <p>${transaction.description ?? ""}</p>
+                    <p class="muted">${formatDate(transaction.date)}</p>
+                `;
+                transactionsContainer.appendChild(item);
+            });
+        }
+
+        function appendTransactionToState(userId, transaction) {
+            const list = state.transactionsByUser.get(userId) || [];
+            list.push(transaction);
+            state.transactionsByUser.set(userId, list);
+            if (state.selectedUserId === userId) {
+                renderTransactions(list);
+            }
+        }
+
+        function computeUserTotals(user, transaction) {
+            const result = {
+                updated_at: new Date().toISOString(),
+            };
+
+            const amount = transaction.amount;
+            let creances = parseNumberOrZero(user.creances);
+            let dettes = parseNumberOrZero(user.dettes);
+
+            if (transaction.relation_type === "creance") {
+                creances = transaction.type === "credit" ? creances + amount : creances - amount;
+            } else if (transaction.relation_type === "dette") {
+                dettes = transaction.type === "credit" ? dettes + amount : dettes - amount;
+            }
+
+            result.creances = roundToTwo(creances);
+            result.dettes = roundToTwo(dettes);
+            result.argent_recolte = roundToTwo(result.creances - result.dettes);
+            return result;
+        }
+
+        async function apiFetch(path, options = {}) {
+            const response = await fetch(`${API_BASE_URL}${path}`, {
+                headers: { "Content-Type": "application/json" },
+                ...options,
+            });
+            if (!response.ok) {
+                const errorBody = await response.json().catch(() => ({}));
+                const message = errorBody.error || response.statusText || "Erreur réseau";
+                throw new Error(message);
+            }
+            return response.json();
+        }
+
+        function parseNumberOrZero(value) {
+            const parsed = Number.parseFloat(value);
+            return Number.isFinite(parsed) ? parsed : 0;
+        }
+        function roundToTwo(value) {
+            return Math.round(value * 100) / 100;
+        }
+        function formatCurrency(value) {
+            const number = parseNumberOrZero(value);
+            return new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR" }).format(number);
+        }
+        function formatDate(value) {
+            if (!value) return "—";
+            const date = new Date(value);
+            if (Number.isNaN(date.getTime())) return value;
+            return date.toLocaleString("fr-FR");
+        }
+        function toLocalInputDateTime(date) {
+            const pad = (n) => n.toString().padStart(2, "0");
+            const yyyy = date.getFullYear();
+            const mm = pad(date.getMonth() + 1);
+            const dd = pad(date.getDate());
+            const hh = pad(date.getHours());
+            const min = pad(date.getMinutes());
+            return `${yyyy}-${mm}-${dd}T${hh}:${min}`;
+        }
+
+        loadUsers().catch((error) => {
+            console.error(error);
+            alert("Impossible de charger les utilisateurs : " + error.message);
+        });
+    </script>
+</body>
+</html>
