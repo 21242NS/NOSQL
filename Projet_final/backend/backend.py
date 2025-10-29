@@ -1,28 +1,21 @@
 import os
 from datetime import datetime
-
-from bson.objectid import ObjectId
-from flask import Flask, jsonify, request
-from flask_cors import CORS
 from pymongo import ASCENDING, DESCENDING, MongoClient
 from pymongo.server_api import ServerApi
-
-from cache import delete_cache, get_cache, set_cache
-
-
-MONGODB_URI = os.getenv("MONGODB_URI", "mongodb://mongo:27017/financialdb")
-MONGO_DB_NAME = os.getenv("MONGO_DB_NAME", "financialdb")
-
-client = MongoClient(MONGODB_URI, server_api=ServerApi("1"))
+from flask import Flask, request, jsonify
+from bson.objectid import ObjectId
+from flask_cors import CORS
+from cache import get_cache, set_cache, delete_cache
+uri = "mongodb://mongo:27017/financialdb"
+client = MongoClient(uri, server_api=ServerApi('1'))
 app = Flask(__name__)
 CORS(app, resources={r"/api/*": {"origins": "*"}})
-
 try:
-    client.admin.command("ping")
+    client.admin.command('ping')
     print("Pinged your deployment. You successfully connected to MongoDB!")
 except Exception as e:
     print(e)
-mongo_db = client[MONGO_DB_NAME]
+mongo_db = client["financialdb"]
 # Collections according to the schema definition.
 users_collection = mongo_db["users"]
 transactions_collection = mongo_db["transactions"]
