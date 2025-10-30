@@ -249,3 +249,40 @@ def update_transaction(transaction_id):
     transactions_collection.update_one({"_id": transaction_oid}, {"$set": data})
     updated_user = recalculate_user_totals(existing["user_id"])
     return jsonify({"message": "Transaction updated", "user": updated_user}), 200
+@app.route("/api/categories", methods=["GET"])
+def get_categories():
+    categories = list(categories_collection.find())
+    serialized = []
+    for category in categories:
+        item = {}
+        for key, value in category.items():
+            if key == "_id":
+                item["_id"] = str(value)
+            else:
+                item[key] = value
+        serialized.append(item)
+    return jsonify(serialized), 200
+@app.route("/api/categories", methods=["POST"])
+def add_category():
+    data = request.json
+    category_id = categories_collection.insert_one(data).inserted_id
+    return jsonify({"_id": str(category_id)}), 201
+@app.route("/api/categories/<category_id>", methods=["DELETE"])
+def delete_category(category_id):
+    if not ObjectId.is_valid(category_id):
+        return jsonify({"error": "Invalid category id"}), 400
+    category_oid = ObjectId(category_id)
+    result = categories_collection.delete_one({"_id": category_oid})
+    if result.deleted_count == 0:
+        return jsonify({"error": "Category not found"}), 404
+    return jsonify({"message": "Category deleted"}), 200
+@app.route("/api/categories/<category_id>", methods=["PUT"])
+def update_category(category_id):
+    if not ObjectId.is_valid(category_id):
+        return jsonify({"error": "Invalid category id"}), 400
+    category_oid = ObjectId(category_id)
+    data = request.json or {}
+    result = categories_collection.update_one({"_id": category_oid}, {"$set": data})
+    if result.matched_count == 0:
+        return jsonify({"error": "Category not found"}), 404
+    return jsonify({"message": "Category updated"}), 200
