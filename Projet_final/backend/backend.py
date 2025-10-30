@@ -32,6 +32,73 @@ admins_collection.create_index("username", unique=True)
 reports_collection.create_index([("period_start", ASCENDING), ("period_end", ASCENDING)])
 notifications_collection.create_index([("user_id", ASCENDING), ("created_at", DESCENDING)])
 
+
+def serialize_user(document):
+    if not document:
+        return None
+    serialized = {}
+    for key, value in document.items():
+        if key == "_id":
+            serialized["_id"] = str(value)
+        elif isinstance(value, datetime):
+            serialized[key] = value.isoformat()
+        elif isinstance(value, ObjectId):
+            serialized[key] = str(value)
+        else:
+            serialized[key] = value
+    return serialized
+
+
+def recalculate_user_totals(user_oid: ObjectId):
+    pipeline = [
+        {"$match": {"user_id": user_oid}},
+        {
+            "$group": {
+                "_id": {"relation_type": "$relation_type", "type": "$type"},
+                "total": {"$sum": {"$cond": [{"$eq": ["$type", "credit"]}, "$amount", {"$multiply": ["$amount", -1]}]}},
+            }
+        },
+    ]
+    summary = {"creances": 0.0, "dettes": 0.0}
+    for row in transactions_collection.aggregate(pipeline):
+        raw_relation_type = row["_id"].get("relation_type")
+        if raw_relation_type == "creance":
+            relation_type = "creances"
+        elif raw_relation_type == "dette":
+            relation_type = "dettes"
+        else:
+            relation_type = raw_relation_type
+        flow_type = row["_id"].get("type")
+        total = float(row.get("total", 0.0))
+        if relation_type not in summary:
+            summary[relation_type] = 0.0
+        if flow_type == "credit":
+            summary[relation_type] += total
+        elif flow_type == "debit":
+            summary[relation_type] -= total
+    creances = summary.get("creances", 0.0)
+    dettes = summary.get("dettes", 0.0)
+    argent_recolte = creances - dettes
+    now = datetime.utcnow()
+
+    users_collection.update_one(
+        {"_id": user_oid},
+        {
+            "$set": {
+                "creances": round(creances, 2),
+                "dettes": round(dettes, 2),
+                "argent_recolte": round(argent_recolte, 2),
+                "updated_at": now,
+            }
+        },
+    )
+
+    updated_user = users_collection.find_one({"_id": user_oid})
+    delete_cache("users:list")
+    delete_cache(f"user:{str(user_oid)}")
+    return serialize_user(updated_user)
+
+
 @app.route("/api/users", methods=["POST"])
 def add_user():
     data = request.json
@@ -44,10 +111,9 @@ def get_users():
     if cached_users:
         return jsonify(cached_users), 200
     users = list(users_collection.find())
-    for user in users:
-        user["_id"] = str(user["_id"])
-    set_cache("users:list", users)
-    return jsonify(users), 200
+    serialized_users = [serialize_user(user) for user in users]
+    set_cache("users:list", serialized_users)
+    return jsonify(serialized_users), 200
 @app.route("/api/users/<user_id>", methods=["GET"])
 def get_user(user_id):
     cached_user = get_cache(f"user:{user_id}")
@@ -55,9 +121,9 @@ def get_user(user_id):
         return jsonify(cached_user), 200
     user = users_collection.find_one({"_id": ObjectId(user_id)})
     if user:
-        user["_id"] = str(user["_id"])
-        set_cache(f"user:{user_id}", user)
-        return jsonify(user), 200
+        serialized_user = serialize_user(user)
+        set_cache(f"user:{user_id}", serialized_user)
+        return jsonify(serialized_user), 200
     return jsonify({"error": "User not found"}), 404
 @app.route("/api/users/<user_id>/transaction", methods=["PUT"])
 def update_user_dept(user_id):
@@ -110,7 +176,76 @@ def update_user_dept(user_id):
     if transaction_id:
         messages.append("Transaction recorded")
 
-    response = {"message": " and ".join(messages)}
+    if transaction_id:
+        updated_user = recalculate_user_totals(user_oid)
+    else:
+        updated_user = serialize_user(users_collection.find_one({"_id": user_oid}))
+
+    response = {"message": " and ".join(messages), "user": updated_user}
     if transaction_id:
         response["transaction_id"] = transaction_id
     return jsonify(response), 200
+@app.route("/api/users/<user_id>", methods=["DELETE"])
+def delete_user(user_id):
+    if not ObjectId.is_valid(user_id):
+        return jsonify({"error": "Invalid user id"}), 400
+    user_oid = ObjectId(user_id)
+    result = users_collection.delete_one({"_id": user_oid})
+    if result.deleted_count == 0:
+        return jsonify({"error": "User not found"}), 404
+    delete_cache(f"user:{user_id}")
+    delete_cache("users:list")
+    return jsonify({"message": "User deleted"}), 200
+@app.route("/api/transactions", methods=["GET"])
+def get_transactions():
+    user_id = request.args.get("user_id")
+    if not user_id or not ObjectId.is_valid(user_id):
+        return jsonify({"error": "Invalid or missing user_id parameter"}), 400
+    user_oid = ObjectId(user_id)
+    transactions = list(transactions_collection.find({"user_id": user_oid}).sort("date", DESCENDING))
+    serialized = []
+    for transaction in transactions:
+        item = {}
+        for key, value in transaction.items():
+            if key == "_id":
+                item["_id"] = str(value)
+            elif isinstance(value, datetime):
+                item[key] = value.isoformat()
+            elif isinstance(value, ObjectId):
+                item[key] = str(value)
+            else:
+                item[key] = value
+        serialized.append(item)
+    return jsonify(serialized), 200
+@app.route("/api/transactions/<transaction_id>", methods=["DELETE"])
+def delete_transaction(transaction_id):
+    if not ObjectId.is_valid(transaction_id):
+        return jsonify({"error": "Invalid transaction id"}), 400
+    transaction_oid = ObjectId(transaction_id)
+    existing = transactions_collection.find_one({"_id": transaction_oid})
+    if not existing:
+        return jsonify({"error": "Transaction not found"}), 404
+    transactions_collection.delete_one({"_id": transaction_oid})
+    updated_user = recalculate_user_totals(existing["user_id"])
+    return jsonify({"message": "Transaction deleted", "user": updated_user}), 200
+
+
+@app.route("/api/transactions/<transaction_id>", methods=["PUT"])
+def update_transaction(transaction_id):
+    if not ObjectId.is_valid(transaction_id):
+        return jsonify({"error": "Invalid transaction id"}), 400
+    transaction_oid = ObjectId(transaction_id)
+    existing = transactions_collection.find_one({"_id": transaction_oid})
+    if not existing:
+        return jsonify({"error": "Transaction not found"}), 404
+
+    data = request.json or {}
+    if "category_id" in data:
+        category_id = data["category_id"]
+        if category_id and not ObjectId.is_valid(category_id):
+            return jsonify({"error": "Invalid category id"}), 400
+        data["category_id"] = ObjectId(category_id) if category_id else None
+
+    transactions_collection.update_one({"_id": transaction_oid}, {"$set": data})
+    updated_user = recalculate_user_totals(existing["user_id"])
+    return jsonify({"message": "Transaction updated", "user": updated_user}), 200

@@ -111,6 +111,11 @@
         .transaction-item.debit {
             border-left-color: #f97316;
         }
+        .transaction-actions {
+            margin-top: 0.75rem;
+            display: flex;
+            gap: 0.5rem;
+        }
         dialog {
             border: none;
             border-radius: 12px;
@@ -175,12 +180,15 @@
                 </p>
             </section>
             <section id="user-details" class="card" hidden>
-                <header style="display:flex;justify-content:space-between;align-items:center;">
+                <header style="display:flex;justify-content:space-between;align-items:center;gap:1rem;">
                     <div>
                         <h2 id="user-name">Utilisateur</h2>
                         <p id="user-email" class="muted"></p>
                     </div>
-                    <button id="open-add-transaction">Ajouter une transaction</button>
+                    <div style="display:flex;gap:0.5rem;">
+                        <button id="open-add-transaction">Ajouter une transaction</button>
+                        <button id="delete-user" class="secondary">Supprimer</button>
+                    </div>
                 </header>
                 <div id="user-meta">
                     <p><span class="badge">Téléphone</span><span id="user-phone">-</span></p>
@@ -271,7 +279,8 @@
         const state = {
             users: [],
             selectedUserId: null,
-            transactionsByUser: new Map(),
+            currentUser: null,
+            transactions: [],
         };
 
         const userListEl = document.getElementById("user-list");
@@ -282,20 +291,24 @@
         const userForm = document.getElementById("user-form");
         const transactionDialog = document.getElementById("transaction-dialog");
         const transactionForm = document.getElementById("transaction-form");
+        const transactionTitleEl = transactionDialog.querySelector("h2");
+        const transactionSubmitButton = transactionDialog.querySelector('button[type="submit"]');
+        const deleteUserButton = document.getElementById("delete-user");
 
         document.getElementById("open-add-user").addEventListener("click", () => {
             userForm.reset();
             userDialog.showModal();
         });
+
         document.getElementById("cancel-user").addEventListener("click", () => userDialog.close());
+
         document.getElementById("open-add-transaction").addEventListener("click", () => {
             if (!state.selectedUserId) return;
-            transactionForm.reset();
-            const now = new Date();
-            transactionForm.elements.date.value = toLocalInputDateTime(now);
-            transactionDialog.showModal();
+            openTransactionDialog("create");
         });
+
         document.getElementById("cancel-transaction").addEventListener("click", () => transactionDialog.close());
+        deleteUserButton.addEventListener("click", handleDeleteUser);
 
         userForm.addEventListener("submit", async (event) => {
             event.preventDefault();
@@ -313,14 +326,33 @@
             payload.updated_at = payload.created_at;
 
             try {
-                await apiFetch("/users", {
+                const created = await apiFetch("/users", {
                     method: "POST",
                     body: JSON.stringify(payload),
                 });
                 userDialog.close();
                 await loadUsers();
+                if (created && created._id) {
+                    await selectUser(created._id);
+                }
             } catch (error) {
                 alert("Erreur lors de la création : " + error.message);
+            }
+        });
+
+        transactionsContainer.addEventListener("click", (event) => {
+            const target = event.target;
+            if (target.closest(".transaction-edit")) {
+                const button = target.closest(".transaction-edit");
+                const transactionId = button.dataset.transactionId;
+                const transaction = state.transactions.find((t) => t._id === transactionId);
+                if (transaction) {
+                    openTransactionDialog("edit", transaction);
+                }
+            } else if (target.closest(".transaction-delete")) {
+                const button = target.closest(".transaction-delete");
+                const transactionId = button.dataset.transactionId;
+                handleDeleteTransaction(transactionId);
             }
         });
 
@@ -328,43 +360,34 @@
             event.preventDefault();
             if (!state.selectedUserId) return;
 
-            const currentUser = state.users.find(u => u._id === state.selectedUserId);
-            if (!currentUser) {
-                alert("Utilisateur introuvable en mémoire.");
-                return;
-            }
-
+            const mode = transactionForm.dataset.mode || "create";
             const formData = new FormData(transactionForm);
-            const payload = {
-                transaction: {
-                    relation_type: formData.get("relation_type"),
-                    type: formData.get("type"),
-                    amount: parseNumberOrZero(formData.get("amount")),
-                    description: formData.get("description") || null,
-                }
-            };
-
-            const categoryId = formData.get("category_id");
-            if (categoryId) {
-                payload.transaction.category_id = categoryId.trim();
-            }
-            const dateValue = formData.get("date");
-            payload.transaction.date = dateValue ? new Date(dateValue).toISOString() : new Date().toISOString();
-
-            const updatedUserFields = computeUserTotals(currentUser, payload.transaction);
-            Object.assign(payload, updatedUserFields);
+            const transactionPayload = collectTransactionFormData(formData);
 
             try {
-                await apiFetch(`/users/${state.selectedUserId}/transaction`, {
-                    method: "PUT",
-                    body: JSON.stringify(payload),
-                });
-                transactionDialog.close();
+                if (mode === "edit") {
+                    const transactionId = transactionForm.dataset.transactionId;
+                    await apiFetch(`/transactions/${transactionId}`, {
+                        method: "PUT",
+                        body: JSON.stringify(transactionPayload),
+                    });
+                } else {
+                    const currentUser = state.currentUser;
+                    if (!currentUser) {
+                        alert("Utilisateur introuvable en mémoire.");
+                        return;
+                    }
+                    const payload = { transaction: transactionPayload };
+                    Object.assign(payload, computeUserTotals(currentUser, transactionPayload));
 
-                await Promise.all([
-                    refreshCurrentUser(),
-                    appendTransactionToState(state.selectedUserId, payload.transaction)
-                ]);
+                    await apiFetch(`/users/${state.selectedUserId}/transaction`, {
+                        method: "PUT",
+                        body: JSON.stringify(payload),
+                    });
+                }
+
+                transactionDialog.close();
+                await refreshCurrentUser();
             } catch (error) {
                 alert("Erreur lors de l'enregistrement : " + error.message);
             }
@@ -374,9 +397,6 @@
             const users = await apiFetch("/users");
             state.users = users;
             renderUserList();
-            if (state.selectedUserId) {
-                await refreshCurrentUser();
-            }
         }
 
         function renderUserList() {
@@ -389,8 +409,10 @@
                 userListEl.appendChild(empty);
                 userDetailsSection.hidden = true;
                 userOverview.hidden = false;
+                renderTransactions([]);
                 return;
             }
+
             state.users.forEach((user) => {
                 const li = document.createElement("li");
                 li.textContent = `${user.first_name ?? ""} ${user.last_name ?? ""}`.trim() || user.email;
@@ -409,24 +431,45 @@
         }
 
         async function refreshCurrentUser() {
-            if (!state.selectedUserId) return;
-            try {
-                const user = await apiFetch(`/users/${state.selectedUserId}`);
-                updateUserDetails(user);
-                state.users = state.users.map(u => u._id === user._id ? user : u);
+            if (!state.selectedUserId) {
+                state.currentUser = null;
+                state.transactions = [];
+                renderTransactions([]);
+                updateUserDetails(null);
+                return;
+            }
 
-                const storedTransactions = state.transactionsByUser.get(user._id) || [];
-                renderTransactions(storedTransactions);
+            try {
+                const [user, transactions] = await Promise.all([
+                    apiFetch(`/users/${state.selectedUserId}`),
+                    apiFetch(`/transactions?user_id=${encodeURIComponent(state.selectedUserId)}`),
+                ]);
+
+                state.currentUser = user;
+                state.transactions = transactions;
+
+                updateUserDetails(user);
+                renderTransactions(transactions);
+
+                state.users = state.users.map((u) => (u._id === user._id ? user : u));
+                renderUserList();
             } catch (error) {
                 alert("Impossible de charger l'utilisateur : " + error.message);
             }
         }
 
         function updateUserDetails(user) {
+            if (!user) {
+                userDetailsSection.hidden = true;
+                userOverview.hidden = false;
+                return;
+            }
+
             userDetailsSection.hidden = false;
             userOverview.hidden = true;
 
-            document.getElementById("user-name").textContent = `${user.first_name ?? ""} ${user.last_name ?? ""}`.trim() || "Profil";
+            document.getElementById("user-name").textContent =
+                `${user.first_name ?? ""} ${user.last_name ?? ""}`.trim() || "Profil";
             document.getElementById("user-email").textContent = user.email || "Email inconnu";
             document.getElementById("user-phone").textContent = user.phone || "—";
             document.getElementById("user-creances").textContent = formatCurrency(user.creances);
@@ -438,7 +481,7 @@
 
         function renderTransactions(transactions) {
             transactionsContainer.innerHTML = "";
-            if (!transactions || transactions.length === 0) {
+            if (!transactions || !transactions.length) {
                 const empty = document.createElement("div");
                 empty.className = "empty-state";
                 empty.textContent = "Aucune transaction enregistrée pour le moment.";
@@ -446,26 +489,84 @@
                 return;
             }
 
-            transactions.slice().reverse().forEach((transaction) => {
+            transactions.forEach((transaction) => {
                 const item = document.createElement("div");
                 item.className = `transaction-item ${transaction.type === "debit" ? "debit" : "credit"}`;
                 item.innerHTML = `
-                    <strong>${transaction.relation_type.toUpperCase()} • ${transaction.type.toUpperCase()}</strong>
+                    <strong>${(transaction.relation_type || "").toUpperCase()} • ${(transaction.type || "").toUpperCase()}</strong>
                     <p>Montant : ${formatCurrency(transaction.amount)}</p>
+                    <p>Catégorie : ${transaction.category_id ?? "—"}</p>
                     <p>${transaction.description ?? ""}</p>
                     <p class="muted">${formatDate(transaction.date)}</p>
                 `;
+
+                const actions = document.createElement("div");
+                actions.className = "transaction-actions";
+                const editButton = document.createElement("button");
+                editButton.type = "button";
+                editButton.className = "secondary transaction-edit";
+                editButton.dataset.transactionId = transaction._id;
+                editButton.textContent = "Modifier";
+                actions.appendChild(editButton);
+                const deleteButton = document.createElement("button");
+                deleteButton.type = "button";
+                deleteButton.className = "secondary transaction-delete";
+                deleteButton.dataset.transactionId = transaction._id;
+                deleteButton.textContent = "Supprimer";
+                actions.appendChild(deleteButton);
+
+                item.appendChild(actions);
                 transactionsContainer.appendChild(item);
             });
         }
 
-        function appendTransactionToState(userId, transaction) {
-            const list = state.transactionsByUser.get(userId) || [];
-            list.push(transaction);
-            state.transactionsByUser.set(userId, list);
-            if (state.selectedUserId === userId) {
-                renderTransactions(list);
+        function openTransactionDialog(mode, transaction = null) {
+            transactionForm.reset();
+            transactionForm.dataset.mode = mode;
+            transactionForm.dataset.transactionId = transaction?._id || "";
+
+            if (mode === "edit" && transaction) {
+                transactionTitleEl.textContent = "Modifier la transaction";
+                transactionSubmitButton.textContent = "Mettre à jour";
+                transactionForm.elements.relation_type.value = transaction.relation_type || "creance";
+                transactionForm.elements.type.value = transaction.type || "credit";
+                transactionForm.elements.amount.value = parseNumberOrZero(transaction.amount);
+                transactionForm.elements.description.value = transaction.description ?? "";
+                transactionForm.elements.category_id.value = transaction.category_id ?? "";
+                const dateValue = transaction.date ? new Date(transaction.date) : new Date();
+                transactionForm.elements.date.value = toLocalInputDateTime(dateValue);
+            } else {
+                transactionTitleEl.textContent = "Nouvelle transaction";
+                transactionSubmitButton.textContent = "Valider";
+                const now = new Date();
+                transactionForm.elements.date.value = toLocalInputDateTime(now);
             }
+
+            transactionDialog.showModal();
+        }
+
+        function collectTransactionFormData(formData) {
+            const amount = parseNumberOrZero(formData.get("amount"));
+            const categoryIdRaw = (formData.get("category_id") || "").trim();
+
+            const data = {
+                relation_type: formData.get("relation_type"),
+                type: formData.get("type"),
+                amount,
+                description: formData.get("description") || null,
+                date: (() => {
+                    const dateValue = formData.get("date");
+                    return dateValue ? new Date(dateValue).toISOString() : new Date().toISOString();
+                })(),
+            };
+
+            if (categoryIdRaw) {
+                data.category_id = categoryIdRaw;
+            } else {
+                data.category_id = null;
+            }
+
+            return data;
         }
 
         function computeUserTotals(user, transaction) {
@@ -506,19 +607,23 @@
             const parsed = Number.parseFloat(value);
             return Number.isFinite(parsed) ? parsed : 0;
         }
+
         function roundToTwo(value) {
             return Math.round(value * 100) / 100;
         }
+
         function formatCurrency(value) {
             const number = parseNumberOrZero(value);
             return new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR" }).format(number);
         }
+
         function formatDate(value) {
             if (!value) return "—";
             const date = new Date(value);
             if (Number.isNaN(date.getTime())) return value;
             return date.toLocaleString("fr-FR");
         }
+
         function toLocalInputDateTime(date) {
             const pad = (n) => n.toString().padStart(2, "0");
             const yyyy = date.getFullYear();
@@ -527,6 +632,59 @@
             const hh = pad(date.getHours());
             const min = pad(date.getMinutes());
             return `${yyyy}-${mm}-${dd}T${hh}:${min}`;
+        }
+
+        async function handleDeleteUser() {
+            if (!state.selectedUserId) {
+                return;
+            }
+            const user = state.currentUser;
+            const label = user
+                ? `${user.first_name ?? ""} ${user.last_name ?? ""}`.trim() || user.email || "cet utilisateur"
+                : "cet utilisateur";
+            const confirmation = window.confirm(`Supprimer ${label} ? Cette action est définitive.`);
+            if (!confirmation) {
+                return;
+            }
+            try {
+                await apiFetch(`/users/${state.selectedUserId}`, {
+                    method: "DELETE",
+                });
+                state.selectedUserId = null;
+                state.currentUser = null;
+                state.transactions = [];
+                await loadUsers();
+                updateUserDetails(null);
+                renderTransactions([]);
+            } catch (error) {
+                alert("Impossible de supprimer l'utilisateur : " + error.message);
+            }
+        }
+
+        async function handleDeleteTransaction(transactionId) {
+            if (!transactionId || !state.selectedUserId) {
+                return;
+            }
+            const confirmation = window.confirm("Supprimer cette transaction ? Cette action est définitive.");
+            if (!confirmation) {
+                return;
+            }
+            try {
+                const response = await apiFetch(`/transactions/${transactionId}`, {
+                    method: "DELETE",
+                });
+
+                if (response && response.user) {
+                    state.currentUser = response.user;
+                    state.users = state.users.map((u) => (u._id === response.user._id ? response.user : u));
+                    updateUserDetails(response.user);
+                }
+
+                state.transactions = state.transactions.filter((t) => t._id !== transactionId);
+                renderTransactions(state.transactions);
+            } catch (error) {
+                alert("Impossible de supprimer la transaction : " + error.message);
+            }
         }
 
         loadUsers().catch((error) => {
