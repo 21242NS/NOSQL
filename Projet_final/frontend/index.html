@@ -77,6 +77,39 @@
         ul.user-list li.active {
             background: rgba(59,130,246,0.4);
         }
+        .category-list {
+            list-style: none;
+            padding: 0;
+            margin: 1rem 0 0;
+            display: flex;
+            flex-direction: column;
+            gap: 0.35rem;
+        }
+        .category-list li {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 0.75rem;
+            padding: 0.65rem 0.75rem;
+            border-radius: 6px;
+            background: rgba(255,255,255,0.04);
+        }
+        .category-list li.category-empty {
+            justify-content: center;
+            background: transparent;
+        }
+        .category-list li header {
+            display: flex;
+            flex-direction: column;
+            gap: 0.2rem;
+        }
+        .category-list li strong {
+            font-size: 0.95rem;
+        }
+        .category-actions {
+            display: flex;
+            gap: 0.4rem;
+        }
         .card {
             background: rgba(17,27,39,0.85);
             border-radius: 12px;
@@ -205,6 +238,14 @@
                     <div id="transactions" class="transactions"></div>
                 </div>
             </section>
+            <section id="category-section" class="card">
+                <header style="display:flex;justify-content:space-between;align-items:center;">
+                    <h2>Catégories</h2>
+                    <button id="open-add-category">Ajouter</button>
+                </header>
+                <p class="muted">Gère les catégories utilisées lors de la création ou modification d'une transaction.</p>
+                <ul id="category-list" class="category-list"></ul>
+            </section>
         </main>
     </div>
 
@@ -260,8 +301,10 @@
             <label>Description
                 <textarea name="description" rows="3" placeholder="Ex: Remboursement partiel"></textarea>
             </label>
-            <label>Catégorie (ID Mongo optionnel)
-                <input type="text" name="category_id" placeholder="5f... (optionnel)">
+            <label>Catégorie
+                <select name="category_id" id="transaction-category">
+                    <option value="">Sans catégorie</option>
+                </select>
             </label>
             <label>Date
                 <input type="datetime-local" name="date">
@@ -269,6 +312,22 @@
             <div class="actions">
                 <button type="button" class="secondary" id="cancel-transaction">Annuler</button>
                 <button type="submit">Valider</button>
+            </div>
+        </form>
+    </dialog>
+
+    <dialog id="category-dialog">
+        <form id="category-form">
+            <h2>Nouvelle catégorie</h2>
+            <label>Nom
+                <input type="text" name="name" required>
+            </label>
+            <label>Description
+                <textarea name="description" rows="3" placeholder="Détail optionnel"></textarea>
+            </label>
+            <div class="actions">
+                <button type="button" class="secondary" id="cancel-category">Annuler</button>
+                <button type="submit">Enregistrer</button>
             </div>
         </form>
     </dialog>
@@ -281,12 +340,14 @@
             selectedUserId: null,
             currentUser: null,
             transactions: [],
+            categories: [],
         };
 
         const userListEl = document.getElementById("user-list");
         const userDetailsSection = document.getElementById("user-details");
         const userOverview = document.getElementById("user-overview");
         const transactionsContainer = document.getElementById("transactions");
+        const categoryListEl = document.getElementById("category-list");
         const userDialog = document.getElementById("user-dialog");
         const userForm = document.getElementById("user-form");
         const transactionDialog = document.getElementById("transaction-dialog");
@@ -294,6 +355,12 @@
         const transactionTitleEl = transactionDialog.querySelector("h2");
         const transactionSubmitButton = transactionDialog.querySelector('button[type="submit"]');
         const deleteUserButton = document.getElementById("delete-user");
+        const categoryDialog = document.getElementById("category-dialog");
+        const categoryForm = document.getElementById("category-form");
+        const categoryTitleEl = categoryDialog.querySelector("h2");
+        const categorySubmitButton = categoryDialog.querySelector('button[type="submit"]');
+        const cancelCategoryButton = document.getElementById("cancel-category");
+        const openAddCategoryButton = document.getElementById("open-add-category");
 
         document.getElementById("open-add-user").addEventListener("click", () => {
             userForm.reset();
@@ -309,6 +376,8 @@
 
         document.getElementById("cancel-transaction").addEventListener("click", () => transactionDialog.close());
         deleteUserButton.addEventListener("click", handleDeleteUser);
+        openAddCategoryButton.addEventListener("click", () => openCategoryDialog("create"));
+        cancelCategoryButton.addEventListener("click", () => categoryDialog.close());
 
         userForm.addEventListener("submit", async (event) => {
             event.preventDefault();
@@ -356,6 +425,54 @@
             }
         });
 
+        categoryForm.addEventListener("submit", async (event) => {
+            event.preventDefault();
+            const mode = categoryForm.dataset.mode || "create";
+            const formData = new FormData(categoryForm);
+            const payload = {
+                name: (formData.get("name") || "").trim(),
+                description: (formData.get("description") || "").trim() || null,
+            };
+
+            if (!payload.name) {
+                alert("Le nom de la catégorie est requis.");
+                return;
+            }
+
+            try {
+                if (mode === "edit") {
+                    const categoryId = categoryForm.dataset.categoryId;
+                    await apiFetch(`/categories/${categoryId}`, {
+                        method: "PUT",
+                        body: JSON.stringify(payload),
+                    });
+                } else {
+                    await apiFetch("/categories", {
+                        method: "POST",
+                        body: JSON.stringify(payload),
+                    });
+                }
+                categoryDialog.close();
+                await loadCategories();
+            } catch (error) {
+                alert("Impossible d'enregistrer la catégorie : " + error.message);
+            }
+        });
+
+        categoryListEl.addEventListener("click", (event) => {
+            const button = event.target.closest("button[data-action]");
+            if (!button) {
+                return;
+            }
+            const categoryId = button.dataset.categoryId;
+            const category = state.categories.find((c) => c._id === categoryId);
+            if (button.dataset.action === "edit" && category) {
+                openCategoryDialog("edit", category);
+            } else if (button.dataset.action === "delete" && categoryId) {
+                handleDeleteCategory(categoryId);
+            }
+        });
+
         transactionForm.addEventListener("submit", async (event) => {
             event.preventDefault();
             if (!state.selectedUserId) return;
@@ -399,6 +516,16 @@
             renderUserList();
         }
 
+        async function loadCategories() {
+            const categories = await apiFetch("/categories");
+            state.categories = categories;
+            renderCategoryList();
+            populateCategorySelect();
+            if (state.transactions.length) {
+                renderTransactions(state.transactions);
+            }
+        }
+
         function renderUserList() {
             userListEl.innerHTML = "";
             if (!state.users.length) {
@@ -421,6 +548,54 @@
                 }
                 li.addEventListener("click", () => selectUser(user._id));
                 userListEl.appendChild(li);
+            });
+        }
+
+        function renderCategoryList() {
+            categoryListEl.innerHTML = "";
+            if (!state.categories.length) {
+                const empty = document.createElement("li");
+                empty.className = "category-empty muted";
+                empty.textContent = "Aucune catégorie";
+                categoryListEl.appendChild(empty);
+                return;
+            }
+
+            state.categories.forEach((category) => {
+                const li = document.createElement("li");
+                const info = document.createElement("header");
+                const nameEl = document.createElement("strong");
+                nameEl.textContent = category.name || "Sans nom";
+                info.appendChild(nameEl);
+                if (category.description) {
+                    const descriptionEl = document.createElement("span");
+                    descriptionEl.className = "muted";
+                    descriptionEl.textContent = category.description;
+                    info.appendChild(descriptionEl);
+                }
+                li.appendChild(info);
+
+                const actions = document.createElement("div");
+                actions.className = "category-actions";
+
+                const editButton = document.createElement("button");
+                editButton.type = "button";
+                editButton.className = "secondary";
+                editButton.dataset.action = "edit";
+                editButton.dataset.categoryId = category._id;
+                editButton.textContent = "Modifier";
+                actions.appendChild(editButton);
+
+                const deleteButton = document.createElement("button");
+                deleteButton.type = "button";
+                deleteButton.className = "secondary";
+                deleteButton.dataset.action = "delete";
+                deleteButton.dataset.categoryId = category._id;
+                deleteButton.textContent = "Supprimer";
+                actions.appendChild(deleteButton);
+
+                li.appendChild(actions);
+                categoryListEl.appendChild(li);
             });
         }
 
@@ -492,10 +667,11 @@
             transactions.forEach((transaction) => {
                 const item = document.createElement("div");
                 item.className = `transaction-item ${transaction.type === "debit" ? "debit" : "credit"}`;
+                const categoryLabel = getCategoryLabel(transaction.category_id);
                 item.innerHTML = `
                     <strong>${(transaction.relation_type || "").toUpperCase()} • ${(transaction.type || "").toUpperCase()}</strong>
                     <p>Montant : ${formatCurrency(transaction.amount)}</p>
-                    <p>Catégorie : ${transaction.category_id ?? "—"}</p>
+                    <p>Catégorie : ${categoryLabel ?? "—"}</p>
                     <p>${transaction.description ?? ""}</p>
                     <p class="muted">${formatDate(transaction.date)}</p>
                 `;
@@ -524,6 +700,7 @@
             transactionForm.reset();
             transactionForm.dataset.mode = mode;
             transactionForm.dataset.transactionId = transaction?._id || "";
+            populateCategorySelect(transaction?.category_id || "");
 
             if (mode === "edit" && transaction) {
                 transactionTitleEl.textContent = "Modifier la transaction";
@@ -547,7 +724,7 @@
 
         function collectTransactionFormData(formData) {
             const amount = parseNumberOrZero(formData.get("amount"));
-            const categoryIdRaw = (formData.get("category_id") || "").trim();
+            const categoryIdRaw = formData.get("category_id") || "";
 
             const data = {
                 relation_type: formData.get("relation_type"),
@@ -560,13 +737,77 @@
                 })(),
             };
 
-            if (categoryIdRaw) {
-                data.category_id = categoryIdRaw;
-            } else {
-                data.category_id = null;
-            }
+            data.category_id = categoryIdRaw || null;
 
             return data;
+        }
+
+        function openCategoryDialog(mode, category = null) {
+            categoryForm.reset();
+            categoryForm.dataset.mode = mode;
+            categoryForm.dataset.categoryId = category?._id || "";
+
+            if (mode === "edit" && category) {
+                categoryTitleEl.textContent = "Modifier la catégorie";
+                categorySubmitButton.textContent = "Mettre à jour";
+                categoryForm.elements.name.value = category.name || "";
+                categoryForm.elements.description.value = category.description || "";
+            } else {
+                categoryTitleEl.textContent = "Nouvelle catégorie";
+                categorySubmitButton.textContent = "Enregistrer";
+            }
+
+            categoryDialog.showModal();
+        }
+
+        async function handleDeleteCategory(categoryId) {
+            const category = state.categories.find((c) => c._id === categoryId);
+            const label = category ? (category.name || category._id) : "cette catégorie";
+            const confirmation = window.confirm(`Supprimer ${label} ? Cette action est définitive.`);
+            if (!confirmation) {
+                return;
+            }
+            try {
+                await apiFetch(`/categories/${categoryId}`, { method: "DELETE" });
+                await loadCategories();
+            } catch (error) {
+                alert("Impossible de supprimer la catégorie : " + error.message);
+            }
+        }
+
+        function populateCategorySelect(selectedId = null) {
+            const select = transactionForm.elements.category_id;
+            if (!select) {
+                return;
+            }
+            const targetValue = selectedId !== null ? selectedId : select.value;
+            select.innerHTML = "";
+
+            const emptyOption = document.createElement("option");
+            emptyOption.value = "";
+            emptyOption.textContent = "Sans catégorie";
+            select.appendChild(emptyOption);
+
+            state.categories.forEach((category) => {
+                const option = document.createElement("option");
+                option.value = category._id;
+                option.textContent = category.name || category._id;
+                select.appendChild(option);
+            });
+
+            if (targetValue && [...select.options].some((option) => option.value === targetValue)) {
+                select.value = targetValue;
+            } else {
+                select.value = "";
+            }
+        }
+
+        function getCategoryLabel(categoryId) {
+            if (!categoryId) {
+                return null;
+            }
+            const category = state.categories.find((c) => c._id === categoryId);
+            return category ? category.name || category._id : categoryId;
         }
 
         function computeUserTotals(user, transaction) {
@@ -687,9 +928,9 @@
             }
         }
 
-        loadUsers().catch((error) => {
+        Promise.all([loadUsers(), loadCategories()]).catch((error) => {
             console.error(error);
-            alert("Impossible de charger les utilisateurs : " + error.message);
+            alert("Impossible de charger les données initiales : " + error.message);
         });
     </script>
 </body>
