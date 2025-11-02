@@ -286,3 +286,107 @@ def update_category(category_id):
     if result.matched_count == 0:
         return jsonify({"error": "Category not found"}), 404
     return jsonify({"message": "Category updated"}), 200
+@app.route("/api/users/<user_id>", methods=["PUT"])
+def update_user(user_id):
+    if not ObjectId.is_valid(user_id):
+        return jsonify({"error": "Invalid user id"}), 400
+    user_oid = ObjectId(user_id)
+    data = request.json or {}
+    result = users_collection.update_one({"_id": user_oid}, {"$set": data})
+    if result.matched_count == 0:
+        return jsonify({"error": "User not found"}), 404
+    delete_cache(f"user:{user_id}")
+    delete_cache("users:list")
+    return jsonify({"message": "User updated"}), 200
+@app.route("/api/reports/generate", methods=["POST"])
+def generate_report():
+    data = request.json
+    user_id = data.get("user_id")
+    period_start = data.get("period_start")
+    period_end = data.get("period_end")
+
+    if not user_id or not ObjectId.is_valid(user_id):
+        return jsonify({"error": "Invalid or missing user_id"}), 400
+    user_oid = ObjectId(user_id)
+
+    if not period_start or not period_end:
+        return jsonify({"error": "Missing period_start or period_end"}), 400
+
+    transactions = list(
+        transactions_collection.find(
+            {
+                "user_id": user_oid,
+                "date": {"$gte": period_start, "$lte": period_end}
+            }
+        ).sort("date", DESCENDING)
+    )
+
+    total_credit = 0.0
+    total_debit = 0.0
+    for txn in transactions:
+        amount = float(txn.get("amount", 0.0))
+        if txn.get("type") == "credit":
+            total_credit += amount
+        elif txn.get("type") == "debit":
+            total_debit += amount
+
+    report_data = {
+        "user_id": user_oid,
+        "period_start": period_start,
+        "period_end": period_end,
+        "total_credit": round(total_credit, 2),
+        "total_debit": round(total_debit, 2),
+        "net_balance": round(total_credit - total_debit, 2),
+        "generated_at": datetime
+    }
+
+    report_id = reports_collection.insert_one(report_data).inserted_id
+    return jsonify({"report_id": str(report_id), "report": report_data}), 201
+@app.route("/api/reports/<report_id>", methods=["GET"])
+def get_report(report_id):
+    if not ObjectId.is_valid(report_id):
+        return jsonify({"error": "Invalid report id"}), 400
+    report_oid = ObjectId(report_id)
+    report = reports_collection.find_one({"_id": report_oid})
+    if not report:
+        return jsonify({"error": "Report not found"}), 404
+    serialized_report = {}
+    for key, value in report.items():
+        if key == "_id":
+            serialized_report["_id"] = str(value)
+        elif isinstance(value, datetime):
+            serialized_report[key] = value.isoformat()
+        elif isinstance(value, ObjectId):
+            serialized_report[key] = str(value)
+        else:
+            serialized_report[key] = value
+    return jsonify(serialized_report), 200
+@app.route("/api/reports", methods=["GET"])
+def list_reports():
+    reports = list(reports_collection.find().sort("generated_at", DESCENDING))
+    serialized_reports = []
+    for report in reports:
+        item = {}
+        for key, value in report.items():
+            if key == "_id":
+                item["_id"] = str(value)
+            elif isinstance(value, datetime):
+                item[key] = value.isoformat()
+            elif isinstance(value, ObjectId):
+                item[key] = str(value)
+            else:
+                item[key] = value
+        serialized_reports.append(item)
+    return jsonify(serialized_reports), 200
+@app.route("/api/reports/<report_id>", methods=["DELETE"])
+def delete_report(report_id):
+    if not ObjectId.is_valid(report_id):
+        return jsonify({"error": "Invalid report id"}), 400
+    report_oid = ObjectId(report_id)
+    result = reports_collection.delete_one({"_id": report_oid})
+    if result.deleted_count == 0:
+        return jsonify({"error": "Report not found"}), 404
+    return jsonify({"message": "Report deleted"}), 200
+
+
+
