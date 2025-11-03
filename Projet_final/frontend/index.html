@@ -152,6 +152,53 @@
             border-color: #3b82f6;
             color: white;
         }
+        .report-history-wrapper {
+            margin-top: 1.5rem;
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+        }
+        .report-history-list {
+            list-style: none;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+        }
+        .report-history-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 1rem;
+            padding: 0.75rem 0.9rem;
+            border-radius: 10px;
+            border: 1px solid rgba(255,255,255,0.12);
+            background: rgba(15,23,42,0.65);
+            cursor: pointer;
+            transition: background 0.2s ease, transform 0.1s ease;
+        }
+        .report-history-item:hover {
+            transform: translateY(-1px);
+            background: rgba(59,130,246,0.25);
+        }
+        .report-history-item.active {
+            border-color: #3b82f6;
+            background: rgba(59,130,246,0.35);
+        }
+        .report-detail {
+            margin-top: 1.5rem;
+        }
+        .report-detail-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 1rem;
+            margin-bottom: 1rem;
+        }
+        .report-detail-header h3 {
+            margin: 0;
+        }
         .transaction-item {
             background: rgba(15,23,42,0.85);
             border-radius: 10px;
@@ -320,22 +367,36 @@
                     <button type="submit" id="generate-reports">Générer les rapports</button>
                 </form>
                 <p id="report-status" class="muted report-status"></p>
-                <div class="table-wrapper">
-                    <table>
-                        <thead>
-                            <tr>
-                                <th>Utilisateur</th>
-                                <th>Créances</th>
-                                <th>Dettes</th>
-                                <th>Argent récolté</th>
-                            </tr>
-                        </thead>
-                        <tbody id="report-table-body">
-                            <tr>
-                                <td colspan="4" class="muted">Aucun rapport généré pour le moment.</td>
-                            </tr>
-                        </tbody>
-                    </table>
+                <div id="report-history-wrapper" class="report-history-wrapper">
+                    <h3>Historique des rapports</h3>
+                    <p id="report-history-empty" class="muted">Aucun rapport enregistré pour le moment.</p>
+                    <ul id="report-history-list" class="report-history-list"></ul>
+                </div>
+                <div id="report-detail" class="report-detail" hidden>
+                    <div class="report-detail-header">
+                        <div>
+                            <h3 id="report-detail-title">Rapport sélectionné</h3>
+                            <p id="report-detail-subtitle" class="muted"></p>
+                        </div>
+                        <button type="button" id="report-back" class="secondary">Retour</button>
+                    </div>
+                    <div class="table-wrapper">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Utilisateur</th>
+                                    <th>Créances</th>
+                                    <th>Dettes</th>
+                                    <th>Argent récolté</th>
+                                </tr>
+                            </thead>
+                            <tbody id="report-table-body">
+                                <tr>
+                                    <td colspan="4" class="muted">Sélectionne un rapport dans l'historique pour afficher les détails.</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
             </section>
         </main>
@@ -434,6 +495,8 @@
             transactions: [],
             categories: [],
             reports: [],
+            reportHistory: [],
+            selectedReportIndex: null,
         };
 
         const userListEl = document.getElementById("user-list");
@@ -458,6 +521,13 @@
         const reportStatusEl = document.getElementById("report-status");
         const reportTableBody = document.getElementById("report-table-body");
         const reportSubmitButton = document.getElementById("generate-reports");
+        const reportHistoryWrapper = document.getElementById("report-history-wrapper");
+        const reportHistoryList = document.getElementById("report-history-list");
+        const reportHistoryEmpty = document.getElementById("report-history-empty");
+        const reportDetail = document.getElementById("report-detail");
+        const reportDetailTitle = document.getElementById("report-detail-title");
+        const reportDetailSubtitle = document.getElementById("report-detail-subtitle");
+        const reportBackButton = document.getElementById("report-back");
         const openAddUserButton = document.getElementById("open-add-user");
         const editUserButton = document.getElementById("open-edit-user");
         const userTitleEl = userDialog.querySelector("h2");
@@ -500,6 +570,14 @@
                 setActiveSection(target);
             });
         });
+
+        if (reportBackButton) {
+            reportBackButton.addEventListener("click", () => {
+                state.selectedReportIndex = null;
+                renderReportDetail();
+                renderReportHistory();
+            });
+        }
 
         userForm.addEventListener("submit", async (event) => {
             event.preventDefault();
@@ -753,8 +831,18 @@
                         }
                     }
 
+                    const entry = {
+                        id: `${Date.now()}-${period_start}-${period_end}`,
+                        period_start,
+                        period_end,
+                        generated_at: new Date().toISOString(),
+                        items: reports,
+                    };
+                    state.reportHistory.unshift(entry);
+                    state.selectedReportIndex = 0;
                     state.reports = reports;
-                    renderReportTable();
+                    renderReportHistory();
+                    renderReportDetail();
                     if (reportStatusEl) {
                         if (reports.length) {
                             const periodStartLabel = formatDate(period_start);
@@ -803,6 +891,11 @@
                 if (editUserButton) {
                     editUserButton.disabled = true;
                 }
+            }
+
+            if (showReports) {
+                renderReportHistory();
+                renderReportDetail();
             }
 
             if (showCategories && !state.categories.length) {
@@ -904,25 +997,142 @@
             });
         }
 
-        function renderReportTable() {
+        function renderReportHistory() {
+            if (!reportHistoryWrapper || !reportHistoryList) {
+                return;
+            }
+
+            const entries = state.reportHistory;
+            reportHistoryList.innerHTML = "";
+
+            if (reportHistoryEmpty) {
+                reportHistoryEmpty.hidden = Boolean(entries.length);
+            }
+
+            if (!entries.length) {
+                if (reportHistoryWrapper) {
+                    reportHistoryWrapper.hidden = false;
+                }
+                return;
+            }
+
+            entries.forEach((entry, index) => {
+                const item = document.createElement("li");
+                item.className = "report-history-item";
+                if (state.selectedReportIndex === index) {
+                    item.classList.add("active");
+                }
+
+                const info = document.createElement("div");
+                info.style.display = "flex";
+                info.style.flexDirection = "column";
+                info.style.gap = "0.2rem";
+
+                const title = document.createElement("span");
+                title.style.fontWeight = "600";
+                title.textContent = `${formatDate(entry.period_start)} → ${formatDate(entry.period_end)}`;
+
+                const subtitle = document.createElement("span");
+                subtitle.className = "muted";
+                subtitle.textContent = `Généré le ${formatDate(entry.generated_at)}`;
+
+                info.appendChild(title);
+                info.appendChild(subtitle);
+
+                const countBadge = document.createElement("span");
+                countBadge.className = "muted";
+                countBadge.textContent = `${entry.items.length} utilisateur(s)`;
+
+                item.appendChild(info);
+                item.appendChild(countBadge);
+
+                item.addEventListener("click", () => {
+                    state.selectedReportIndex = index;
+                    renderReportHistory();
+                    renderReportDetail();
+                });
+
+                reportHistoryList.appendChild(item);
+            });
+
+            reportHistoryWrapper.hidden = state.selectedReportIndex !== null;
+        }
+
+        function renderReportDetail() {
+            if (!reportDetail) {
+                return;
+            }
+
+            const index = state.selectedReportIndex;
+            if (index === null || index < 0 || index >= state.reportHistory.length) {
+                reportDetail.hidden = true;
+                state.reports = [];
+                renderReportTable([]);
+                if (reportBackButton) {
+                    reportBackButton.hidden = true;
+                }
+                if (reportHistoryWrapper) {
+                    reportHistoryWrapper.hidden = false;
+                }
+                if (reportDetailSubtitle) {
+                    reportDetailSubtitle.textContent = "";
+                }
+                if (reportStatusEl) {
+                    reportStatusEl.textContent = state.reportHistory.length
+                        ? "Sélectionne un rapport dans l'historique pour afficher les détails."
+                        : "Génère un rapport pour démarrer.";
+                }
+                return;
+            }
+
+            const entry = state.reportHistory[index];
+            state.reports = entry.items;
+            reportDetail.hidden = false;
+            if (reportBackButton) {
+                reportBackButton.hidden = false;
+            }
+            if (reportHistoryWrapper) {
+                reportHistoryWrapper.hidden = true;
+            }
+
+            if (reportDetailTitle) {
+                reportDetailTitle.textContent = `Rapport ${index + 1}`;
+            }
+            if (reportDetailSubtitle) {
+                const periodLabel = `${formatDate(entry.period_start)} → ${formatDate(entry.period_end)}`;
+                const generatedLabel = formatDate(entry.generated_at);
+                reportDetailSubtitle.textContent = `${periodLabel} • Généré le ${generatedLabel}`;
+            }
+            if (reportStatusEl) {
+                const periodLabel = `${formatDate(entry.period_start)} → ${formatDate(entry.period_end)}`;
+                reportStatusEl.textContent = `Rapport sélectionné (${periodLabel}) pour ${entry.items.length} utilisateur(s).`;
+            }
+
+            renderReportTable(entry.items);
+        }
+
+        function renderReportTable(items = state.reports) {
             if (!reportTableBody) {
                 return;
             }
 
             reportTableBody.innerHTML = "";
 
-            if (!state.reports.length) {
+            if (!items || !items.length) {
                 const emptyRow = document.createElement("tr");
                 const emptyCell = document.createElement("td");
                 emptyCell.colSpan = 4;
                 emptyCell.className = "muted";
-                emptyCell.textContent = "Aucun rapport généré pour le moment.";
+                emptyCell.textContent =
+                    state.selectedReportIndex === null
+                        ? "Sélectionne un rapport dans l'historique pour afficher les détails."
+                        : "Aucune donnée disponible pour ce rapport.";
                 emptyRow.appendChild(emptyCell);
                 reportTableBody.appendChild(emptyRow);
                 return;
             }
 
-            state.reports.forEach(({ user, report }) => {
+            items.forEach(({ user, report }) => {
                 const row = document.createElement("tr");
                 const fullName =
                     `${user.first_name ?? ""} ${user.last_name ?? ""}`.trim() ||
@@ -1272,7 +1482,8 @@
         }
 
         setActiveSection(activeSection);
-        renderReportTable();
+        renderReportHistory();
+        renderReportDetail();
 
         Promise.all([loadUsers(), loadCategories()]).catch((error) => {
             console.error(error);
