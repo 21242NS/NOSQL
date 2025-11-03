@@ -135,6 +135,23 @@
             flex-direction: column;
             gap: 0.75rem;
         }
+        .subnav {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.75rem;
+            margin-bottom: 1.5rem;
+        }
+        .subnav button {
+            background: rgba(255,255,255,0.08);
+            border: 1px solid rgba(255,255,255,0.12);
+            color: inherit;
+            padding: 0.5rem 0.9rem;
+        }
+        .subnav button.active {
+            background: #3b82f6;
+            border-color: #3b82f6;
+            color: white;
+        }
         .transaction-item {
             background: rgba(15,23,42,0.85);
             border-radius: 10px;
@@ -190,6 +207,39 @@
             border: 1px dashed rgba(255,255,255,0.2);
             border-radius: 12px;
         }
+        .report-controls {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 1rem;
+            margin-top: 1rem;
+            align-items: flex-end;
+        }
+        .report-controls label {
+            flex: 1;
+            min-width: 180px;
+        }
+        .report-status {
+            margin-top: 1rem;
+        }
+        .table-wrapper {
+            overflow-x: auto;
+            margin-top: 1.25rem;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        thead {
+            background: rgba(255,255,255,0.04);
+        }
+        th, td {
+            padding: 0.75rem;
+            text-align: left;
+            border-bottom: 1px solid rgba(255,255,255,0.08);
+        }
+        tbody tr:last-child td {
+            border-bottom: none;
+        }
         @media (max-width: 900px) {
             body { flex-direction: column; }
             aside { width: 100%; border-right: none; border-bottom: 1px solid rgba(255,255,255,0.12); }
@@ -205,6 +255,11 @@
             <ul id="user-list" class="user-list"></ul>
         </aside>
         <main>
+            <nav class="subnav">
+                <button type="button" data-section="users" class="active">Utilisateurs</button>
+                <button type="button" data-section="categories">Catégories</button>
+                <button type="button" data-section="reports">Rapports</button>
+            </nav>
             <section id="user-overview" class="card">
                 <h1>Console de test</h1>
                 <p class="muted">
@@ -219,6 +274,7 @@
                         <p id="user-email" class="muted"></p>
                     </div>
                     <div style="display:flex;gap:0.5rem;">
+                        <button id="open-edit-user" class="secondary" disabled>Modifier</button>
                         <button id="open-add-transaction">Ajouter une transaction</button>
                         <button id="delete-user" class="secondary">Supprimer</button>
                     </div>
@@ -245,6 +301,42 @@
                 </header>
                 <p class="muted">Gère les catégories utilisées lors de la création ou modification d'une transaction.</p>
                 <ul id="category-list" class="category-list"></ul>
+            </section>
+            <section id="reports-section" class="card">
+                <header>
+                    <h2>Rapports financiers</h2>
+                </header>
+                <p class="muted">
+                    Sélectionne une période, puis génère un rapport pour chaque utilisateur afin de visualiser leurs créances,
+                    dettes et l'argent récolté.
+                </p>
+                <form id="report-form" class="report-controls">
+                    <label>Période début
+                        <input type="datetime-local" name="period_start" required>
+                    </label>
+                    <label>Période fin
+                        <input type="datetime-local" name="period_end" required>
+                    </label>
+                    <button type="submit" id="generate-reports">Générer les rapports</button>
+                </form>
+                <p id="report-status" class="muted report-status"></p>
+                <div class="table-wrapper">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Utilisateur</th>
+                                <th>Créances</th>
+                                <th>Dettes</th>
+                                <th>Argent récolté</th>
+                            </tr>
+                        </thead>
+                        <tbody id="report-table-body">
+                            <tr>
+                                <td colspan="4" class="muted">Aucun rapport généré pour le moment.</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
             </section>
         </main>
     </div>
@@ -341,6 +433,7 @@
             currentUser: null,
             transactions: [],
             categories: [],
+            reports: [],
         };
 
         const userListEl = document.getElementById("user-list");
@@ -361,11 +454,31 @@
         const categorySubmitButton = categoryDialog.querySelector('button[type="submit"]');
         const cancelCategoryButton = document.getElementById("cancel-category");
         const openAddCategoryButton = document.getElementById("open-add-category");
+        const reportForm = document.getElementById("report-form");
+        const reportStatusEl = document.getElementById("report-status");
+        const reportTableBody = document.getElementById("report-table-body");
+        const reportSubmitButton = document.getElementById("generate-reports");
+        const openAddUserButton = document.getElementById("open-add-user");
+        const editUserButton = document.getElementById("open-edit-user");
+        const userTitleEl = userDialog.querySelector("h2");
+        const userSubmitButton = userDialog.querySelector('button[type="submit"]');
+        const categorySection = document.getElementById("category-section");
+        const reportsSection = document.getElementById("reports-section");
+        const subnavButtons = document.querySelectorAll(".subnav [data-section]");
+        let activeSection = "users";
 
-        document.getElementById("open-add-user").addEventListener("click", () => {
-            userForm.reset();
-            userDialog.showModal();
-        });
+        if (openAddUserButton) {
+            openAddUserButton.addEventListener("click", () => openUserDialog("create"));
+        }
+
+        if (editUserButton) {
+            editUserButton.addEventListener("click", () => {
+                if (!state.currentUser) {
+                    return;
+                }
+                openUserDialog("edit", state.currentUser);
+            });
+        }
 
         document.getElementById("cancel-user").addEventListener("click", () => userDialog.close());
 
@@ -378,36 +491,100 @@
         deleteUserButton.addEventListener("click", handleDeleteUser);
         openAddCategoryButton.addEventListener("click", () => openCategoryDialog("create"));
         cancelCategoryButton.addEventListener("click", () => categoryDialog.close());
+        subnavButtons.forEach((button) => {
+            button.addEventListener("click", () => {
+                const target = button.dataset.section;
+                if (!target) {
+                    return;
+                }
+                setActiveSection(target);
+            });
+        });
 
         userForm.addEventListener("submit", async (event) => {
             event.preventDefault();
+            const mode = userForm.dataset.mode || "create";
+            const userId = userForm.dataset.userId || "";
             const formData = new FormData(userForm);
-            const payload = Object.fromEntries(formData.entries());
 
-            payload.creances = parseNumberOrZero(payload.creances);
-            payload.dettes = parseNumberOrZero(payload.dettes);
-            if (payload.argent_recolte) {
-                payload.argent_recolte = parseNumberOrZero(payload.argent_recolte);
-            } else {
-                payload.argent_recolte = payload.creances - payload.dettes;
-            }
-            payload.created_at = new Date().toISOString();
-            payload.updated_at = payload.created_at;
+            const payload = {
+                first_name: (formData.get("first_name") || "").trim(),
+                last_name: (formData.get("last_name") || "").trim(),
+                email: (formData.get("email") || "").trim(),
+                phone: (formData.get("phone") || "").trim(),
+            };
+
+            payload.creances = parseNumberOrZero(formData.get("creances"));
+            payload.dettes = parseNumberOrZero(formData.get("dettes"));
+
+            const argentRecolteInput = formData.get("argent_recolte");
+            let argentRecolteValue = argentRecolteInput ? parseNumberOrZero(argentRecolteInput) : payload.creances - payload.dettes;
+
+            const roundToTwo = (value) => Math.round(value * 100) / 100;
+            payload.creances = roundToTwo(payload.creances);
+            payload.dettes = roundToTwo(payload.dettes);
+            payload.argent_recolte = roundToTwo(argentRecolteValue);
+            payload.phone = payload.phone || null;
+
+            const timestamp = new Date().toISOString();
 
             try {
-                const created = await apiFetch("/users", {
-                    method: "POST",
-                    body: JSON.stringify(payload),
-                });
-                userDialog.close();
-                await loadUsers();
-                if (created && created._id) {
-                    await selectUser(created._id);
+                if (mode === "edit") {
+                    if (!userId) {
+                        throw new Error("Utilisateur introuvable.");
+                    }
+                    payload.updated_at = timestamp;
+                    await apiFetch(`/users/${userId}`, {
+                        method: "PUT",
+                        body: JSON.stringify(payload),
+                    });
+                    userDialog.close();
+                    await refreshCurrentUser();
+                } else {
+                    payload.created_at = timestamp;
+                    payload.updated_at = timestamp;
+                    const created = await apiFetch("/users", {
+                        method: "POST",
+                        body: JSON.stringify(payload),
+                    });
+                    userDialog.close();
+                    await loadUsers();
+                    if (created && created._id) {
+                        await selectUser(created._id);
+                    }
                 }
             } catch (error) {
-                alert("Erreur lors de la création : " + error.message);
+                alert("Erreur lors de l'enregistrement : " + error.message);
             }
         });
+
+        function openUserDialog(mode, user = null) {
+            userForm.reset();
+            userForm.dataset.mode = mode;
+            userForm.dataset.userId = user?._id || "";
+
+            if (userTitleEl) {
+                userTitleEl.textContent = mode === "edit" ? "Modifier l'utilisateur" : "Nouvel utilisateur";
+            }
+            if (userSubmitButton) {
+                userSubmitButton.textContent = mode === "edit" ? "Enregistrer les modifications" : "Enregistrer";
+            }
+
+            if (mode === "edit" && user) {
+                userForm.elements.first_name.value = user.first_name || "";
+                userForm.elements.last_name.value = user.last_name || "";
+                userForm.elements.email.value = user.email || "";
+                userForm.elements.phone.value = user.phone || "";
+                userForm.elements.creances.value = parseNumberOrZero(user.creances);
+                userForm.elements.dettes.value = parseNumberOrZero(user.dettes);
+                userForm.elements.argent_recolte.value =
+                    user.argent_recolte !== undefined && user.argent_recolte !== null
+                        ? parseNumberOrZero(user.argent_recolte)
+                        : "";
+            }
+
+            userDialog.showModal();
+        }
 
         transactionsContainer.addEventListener("click", (event) => {
             const target = event.target;
@@ -484,23 +661,28 @@
             try {
                 if (mode === "edit") {
                     const transactionId = transactionForm.dataset.transactionId;
-                    await apiFetch(`/transactions/${transactionId}`, {
+                    const response = await apiFetch(`/transactions/${transactionId}`, {
                         method: "PUT",
                         body: JSON.stringify(transactionPayload),
                     });
+                    if (response && response.user) {
+                        state.currentUser = response.user;
+                        state.users = state.users.map((u) => (u._id === response.user._id ? response.user : u));
+                    }
                 } else {
-                    const currentUser = state.currentUser;
-                    if (!currentUser) {
+                    if (!state.currentUser) {
                         alert("Utilisateur introuvable en mémoire.");
                         return;
                     }
                     const payload = { transaction: transactionPayload };
-                    Object.assign(payload, computeUserTotals(currentUser, transactionPayload));
-
-                    await apiFetch(`/users/${state.selectedUserId}/transaction`, {
+                    const response = await apiFetch(`/users/${state.selectedUserId}/transaction`, {
                         method: "PUT",
                         body: JSON.stringify(payload),
                     });
+                    if (response && response.user) {
+                        state.currentUser = response.user;
+                        state.users = state.users.map((u) => (u._id === response.user._id ? response.user : u));
+                    }
                 }
 
                 transactionDialog.close();
@@ -509,6 +691,124 @@
                 alert("Erreur lors de l'enregistrement : " + error.message);
             }
         });
+
+        if (reportForm) {
+            reportForm.addEventListener("submit", async (event) => {
+                event.preventDefault();
+                const formData = new FormData(reportForm);
+                const periodStartValue = formData.get("period_start");
+                const periodEndValue = formData.get("period_end");
+
+                if (!periodStartValue || !periodEndValue) {
+                    alert("Veuillez renseigner les deux dates de la période.");
+                    return;
+                }
+
+                const startDate = new Date(periodStartValue);
+                const endDate = new Date(periodEndValue);
+                if (Number.isNaN(startDate.getTime()) || Number.isNaN(endDate.getTime())) {
+                    alert("Format de date invalide.");
+                    return;
+                }
+                if (startDate > endDate) {
+                    alert("La date de début doit être antérieure à la date de fin.");
+                    return;
+                }
+
+                const period_start = startDate.toISOString();
+                const period_end = endDate.toISOString();
+
+                if (reportSubmitButton) {
+                    reportSubmitButton.disabled = true;
+                    reportSubmitButton.textContent = "Génération...";
+                }
+                if (reportStatusEl) {
+                    reportStatusEl.textContent = "Génération des rapports en cours...";
+                }
+
+                try {
+                    if (!state.users.length) {
+                        await loadUsers();
+                    }
+
+                    const reports = [];
+                    for (const user of state.users) {
+                        try {
+                            const response = await apiFetch(`/reports/generate`, {
+                                method: "POST",
+                                body: JSON.stringify({
+                                    user_id: user._id,
+                                    period_start,
+                                    period_end,
+                                }),
+                            });
+                            if (response && response.report) {
+                                reports.push({
+                                    user,
+                                    report: response.report,
+                                });
+                            }
+                        } catch (error) {
+                            console.error(`Erreur pour l'utilisateur ${user._id} :`, error);
+                        }
+                    }
+
+                    state.reports = reports;
+                    renderReportTable();
+                    if (reportStatusEl) {
+                        if (reports.length) {
+                            const periodStartLabel = formatDate(period_start);
+                            const periodEndLabel = formatDate(period_end);
+                            reportStatusEl.textContent = `Rapports générés (${periodStartLabel} → ${periodEndLabel}) pour ${reports.length} utilisateur(s).`;
+                        } else {
+                            reportStatusEl.textContent = "Aucun rapport généré pour cette période.";
+                        }
+                    }
+                } catch (error) {
+                    alert("Impossible de générer les rapports : " + error.message);
+                    if (reportStatusEl) {
+                        reportStatusEl.textContent = "";
+                    }
+                } finally {
+                    if (reportSubmitButton) {
+                        reportSubmitButton.disabled = false;
+                        reportSubmitButton.textContent = "Générer les rapports";
+                    }
+                }
+            });
+        }
+
+        function setActiveSection(section) {
+            activeSection = section;
+            subnavButtons.forEach((button) => {
+                button.classList.toggle("active", button.dataset.section === section);
+            });
+
+            const showUsers = section === "users";
+            const showCategories = section === "categories";
+            const showReports = section === "reports";
+
+            if (categorySection) {
+                categorySection.hidden = !showCategories;
+            }
+            if (reportsSection) {
+                reportsSection.hidden = !showReports;
+            }
+
+            if (showUsers) {
+                updateUserDetails(state.currentUser);
+            } else {
+                userOverview.hidden = true;
+                userDetailsSection.hidden = true;
+                if (editUserButton) {
+                    editUserButton.disabled = true;
+                }
+            }
+
+            if (showCategories && !state.categories.length) {
+                loadCategories().catch((error) => console.error(error));
+            }
+        }
 
         async function loadUsers() {
             const users = await apiFetch("/users");
@@ -534,8 +834,13 @@
                 empty.textContent = "Aucun utilisateur";
                 empty.style.cursor = "default";
                 userListEl.appendChild(empty);
-                userDetailsSection.hidden = true;
-                userOverview.hidden = false;
+                if (activeSection === "users") {
+                    userDetailsSection.hidden = true;
+                    userOverview.hidden = false;
+                } else {
+                    userDetailsSection.hidden = true;
+                    userOverview.hidden = true;
+                }
                 renderTransactions([]);
                 return;
             }
@@ -599,6 +904,53 @@
             });
         }
 
+        function renderReportTable() {
+            if (!reportTableBody) {
+                return;
+            }
+
+            reportTableBody.innerHTML = "";
+
+            if (!state.reports.length) {
+                const emptyRow = document.createElement("tr");
+                const emptyCell = document.createElement("td");
+                emptyCell.colSpan = 4;
+                emptyCell.className = "muted";
+                emptyCell.textContent = "Aucun rapport généré pour le moment.";
+                emptyRow.appendChild(emptyCell);
+                reportTableBody.appendChild(emptyRow);
+                return;
+            }
+
+            state.reports.forEach(({ user, report }) => {
+                const row = document.createElement("tr");
+                const fullName =
+                    `${user.first_name ?? ""} ${user.last_name ?? ""}`.trim() ||
+                    user.email ||
+                    "Utilisateur";
+
+                const creancesValue = parseNumberOrZero(report.total_credit ?? report.creances);
+                const dettesValue = parseNumberOrZero(report.total_debit ?? report.dettes);
+                const collecteValue = parseNumberOrZero(report.net_balance ?? report.argent_recolte);
+
+                const nameCell = document.createElement("td");
+                nameCell.textContent = fullName;
+                const creancesCell = document.createElement("td");
+                creancesCell.textContent = formatCurrency(creancesValue);
+                const dettesCell = document.createElement("td");
+                dettesCell.textContent = formatCurrency(dettesValue);
+                const collecteCell = document.createElement("td");
+                collecteCell.textContent = formatCurrency(collecteValue);
+
+                row.appendChild(nameCell);
+                row.appendChild(creancesCell);
+                row.appendChild(dettesCell);
+                row.appendChild(collecteCell);
+
+                reportTableBody.appendChild(row);
+            });
+        }
+
         async function selectUser(userId) {
             state.selectedUserId = userId;
             renderUserList();
@@ -634,14 +986,30 @@
         }
 
         function updateUserDetails(user) {
+            const showUsers = activeSection === "users";
+            if (!showUsers) {
+                userDetailsSection.hidden = true;
+                userOverview.hidden = true;
+                if (editUserButton) {
+                    editUserButton.disabled = true;
+                }
+                return;
+            }
+
             if (!user) {
                 userDetailsSection.hidden = true;
                 userOverview.hidden = false;
+                if (editUserButton) {
+                    editUserButton.disabled = true;
+                }
                 return;
             }
 
             userDetailsSection.hidden = false;
             userOverview.hidden = true;
+            if (editUserButton) {
+                editUserButton.disabled = false;
+            }
 
             document.getElementById("user-name").textContent =
                 `${user.first_name ?? ""} ${user.last_name ?? ""}`.trim() || "Profil";
@@ -810,27 +1178,6 @@
             return category ? category.name || category._id : categoryId;
         }
 
-        function computeUserTotals(user, transaction) {
-            const result = {
-                updated_at: new Date().toISOString(),
-            };
-
-            const amount = transaction.amount;
-            let creances = parseNumberOrZero(user.creances);
-            let dettes = parseNumberOrZero(user.dettes);
-
-            if (transaction.relation_type === "creance") {
-                creances = transaction.type === "credit" ? creances + amount : creances - amount;
-            } else if (transaction.relation_type === "dette") {
-                dettes = transaction.type === "credit" ? dettes + amount : dettes - amount;
-            }
-
-            result.creances = roundToTwo(creances);
-            result.dettes = roundToTwo(dettes);
-            result.argent_recolte = roundToTwo(result.creances - result.dettes);
-            return result;
-        }
-
         async function apiFetch(path, options = {}) {
             const response = await fetch(`${API_BASE_URL}${path}`, {
                 headers: { "Content-Type": "application/json" },
@@ -847,10 +1194,6 @@
         function parseNumberOrZero(value) {
             const parsed = Number.parseFloat(value);
             return Number.isFinite(parsed) ? parsed : 0;
-        }
-
-        function roundToTwo(value) {
-            return Math.round(value * 100) / 100;
         }
 
         function formatCurrency(value) {
@@ -927,6 +1270,9 @@
                 alert("Impossible de supprimer la transaction : " + error.message);
             }
         }
+
+        setActiveSection(activeSection);
+        renderReportTable();
 
         Promise.all([loadUsers(), loadCategories()]).catch((error) => {
             console.error(error);

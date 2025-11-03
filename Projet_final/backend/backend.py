@@ -337,11 +337,20 @@ def generate_report():
         "total_credit": round(total_credit, 2),
         "total_debit": round(total_debit, 2),
         "net_balance": round(total_credit - total_debit, 2),
-        "generated_at": datetime
+        "generated_at": datetime.utcnow()
     }
 
     report_id = reports_collection.insert_one(report_data).inserted_id
-    return jsonify({"report_id": str(report_id), "report": report_data}), 201
+
+    serialized_report = {
+        key: value
+        for key, value in report_data.items()
+        if key != "_id"
+    }
+    serialized_report["user_id"] = str(user_oid)
+    serialized_report["generated_at"] = report_data["generated_at"].isoformat()
+
+    return jsonify({"report_id": str(report_id), "report": serialized_report}), 201
 @app.route("/api/reports/<report_id>", methods=["GET"])
 def get_report(report_id):
     if not ObjectId.is_valid(report_id):
@@ -387,6 +396,3 @@ def delete_report(report_id):
     if result.deleted_count == 0:
         return jsonify({"error": "Report not found"}), 404
     return jsonify({"message": "Report deleted"}), 200
-
-
-
