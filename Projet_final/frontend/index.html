@@ -110,6 +110,36 @@
             display: flex;
             gap: 0.4rem;
         }
+        .notification-list {
+            list-style: none;
+            padding: 0;
+            margin: 1rem 0 0;
+            display: flex;
+            flex-direction: column;
+            gap: 0.35rem;
+        }
+        .notification-list li {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 0.75rem;
+            padding: 0.65rem 0.75rem;
+            border-radius: 6px;
+            background: rgba(255,255,255,0.04);
+        }
+        .notification-list li.unread {
+            background: rgba(59,130,246,0.25);
+            border: 1px solid rgba(59,130,246,0.35);
+        }
+        .notification-list li header {
+            display: flex;
+            flex-direction: column;
+            gap: 0.25rem;
+        }
+        .notification-actions {
+            display: flex;
+            gap: 0.4rem;
+        }
         .card {
             background: rgba(17,27,39,0.85);
             border-radius: 12px;
@@ -207,6 +237,10 @@
         }
         .transaction-item.debit {
             border-left-color: #f97316;
+        }
+        .transaction-item.highlight {
+            border-left-color: #facc15;
+            box-shadow: 0 0 12px rgba(250, 204, 21, 0.45);
         }
         .transaction-actions {
             margin-top: 0.75rem;
@@ -340,6 +374,17 @@
                     <h3>Transactions</h3>
                     <div id="transactions" class="transactions"></div>
                 </div>
+            </section>
+            <section id="notification-section" class="card">
+                <header style="display:flex;justify-content:space-between;align-items:center;gap:1rem;">
+                    <h2>Notifications</h2>
+                    <div style="display:flex;gap:0.5rem;">
+                        <button id="refresh-notifications" class="secondary">Rafraîchir</button>
+                        <button id="clear-notifications" class="secondary">Tout supprimer</button>
+                    </div>
+                </header>
+                <p class="muted">Reste informé des créations d'utilisateurs, transactions ou rapports, et accède-y rapidement.</p>
+                <ul id="notification-list" class="notification-list"></ul>
             </section>
             <section id="category-section" class="card">
                 <header style="display:flex;justify-content:space-between;align-items:center;">
@@ -497,12 +542,16 @@
             reports: [],
             reportHistory: [],
             selectedReportIndex: null,
+            notifications: [],
+            highlightTransactionId: null,
         };
 
         const userListEl = document.getElementById("user-list");
         const userDetailsSection = document.getElementById("user-details");
         const userOverview = document.getElementById("user-overview");
         const transactionsContainer = document.getElementById("transactions");
+        const notificationSection = document.getElementById("notification-section");
+        const notificationListEl = document.getElementById("notification-list");
         const categoryListEl = document.getElementById("category-list");
         const userDialog = document.getElementById("user-dialog");
         const userForm = document.getElementById("user-form");
@@ -536,6 +585,8 @@
         const reportsSection = document.getElementById("reports-section");
         const subnavButtons = document.querySelectorAll(".subnav [data-section]");
         let activeSection = "users";
+        const refreshNotificationsButton = document.getElementById("refresh-notifications");
+        const clearNotificationsButton = document.getElementById("clear-notifications");
 
         if (openAddUserButton) {
             openAddUserButton.addEventListener("click", () => openUserDialog("create"));
@@ -561,6 +612,14 @@
         deleteUserButton.addEventListener("click", handleDeleteUser);
         openAddCategoryButton.addEventListener("click", () => openCategoryDialog("create"));
         cancelCategoryButton.addEventListener("click", () => categoryDialog.close());
+        if (refreshNotificationsButton) {
+            refreshNotificationsButton.addEventListener("click", () => loadNotifications().catch(console.error));
+        }
+        if (clearNotificationsButton) {
+            clearNotificationsButton.addEventListener("click", () => clearAllNotifications().catch((error) => {
+                alert("Impossible de supprimer les notifications : " + error.message);
+            }));
+        }
         subnavButtons.forEach((button) => {
             button.addEventListener("click", () => {
                 const target = button.dataset.section;
@@ -629,6 +688,13 @@
                     await loadUsers();
                     if (created && created._id) {
                         await selectUser(created._id);
+                        await createNotification({
+                            message: `Nouvel utilisateur créé : ${formatUserName(payload)}`,
+                            target_type: "user",
+                            target_id: created._id,
+                            related_user_id: created._id,
+                            metadata: { email: payload.email },
+                        });
                     }
                 }
             } catch (error) {
@@ -728,6 +794,33 @@
             }
         });
 
+        if (notificationListEl) {
+            notificationListEl.addEventListener("click", async (event) => {
+                const button = event.target.closest("button[data-notification-id]");
+                if (!button) {
+                    return;
+                }
+                const notificationId = button.dataset.notificationId;
+                const action = button.dataset.action;
+                const notification = state.notifications.find((item) => item._id === notificationId);
+                if (!notification) {
+                    return;
+                }
+                if (action === "open") {
+                    try {
+                        await handleNotificationAction(notification);
+                    } catch (error) {
+                        console.error(error);
+                        alert("Impossible d'ouvrir la notification : " + (error?.message || "Erreur inconnue"));
+                    }
+                } else if (action === "delete") {
+                    await deleteNotification(notificationId).catch((error) => {
+                        alert("Impossible de supprimer la notification : " + error.message);
+                    });
+                }
+            });
+        }
+
         transactionForm.addEventListener("submit", async (event) => {
             event.preventDefault();
             if (!state.selectedUserId) return;
@@ -735,6 +828,7 @@
             const mode = transactionForm.dataset.mode || "create";
             const formData = new FormData(transactionForm);
             const transactionPayload = collectTransactionFormData(formData);
+            let createdTransactionId = null;
 
             try {
                 if (mode === "edit") {
@@ -761,10 +855,30 @@
                         state.currentUser = response.user;
                         state.users = state.users.map((u) => (u._id === response.user._id ? response.user : u));
                     }
+                    if (response && response.transaction_id) {
+                        createdTransactionId = response.transaction_id;
+                    }
                 }
 
                 transactionDialog.close();
+                if (createdTransactionId) {
+                    state.highlightTransactionId = createdTransactionId;
+                }
                 await refreshCurrentUser();
+                if (createdTransactionId) {
+                    await createNotification({
+                        message: `Nouvelle transaction ${transactionPayload.relation_type} (${transactionPayload.type}) pour ${formatUserName(state.currentUser)}`,
+                        target_type: "transaction",
+                        target_id: createdTransactionId,
+                        related_user_id: state.selectedUserId,
+                        metadata: {
+                            amount: transactionPayload.amount,
+                            relation_type: transactionPayload.relation_type,
+                            type: transactionPayload.type,
+                            user_name: formatUserName(state.currentUser),
+                        },
+                    });
+                }
             } catch (error) {
                 alert("Erreur lors de l'enregistrement : " + error.message);
             }
@@ -825,6 +939,20 @@
                                     user,
                                     report: response.report,
                                 });
+                                if (response.report_id) {
+                                    await createNotification({
+                                        message: `Rapport généré pour ${formatUserName(user)}`,
+                                        target_type: "report",
+                                        target_id: response.report_id,
+                                        related_user_id: user._id,
+                                        metadata: {
+                                            user_id: user._id,
+                                            user_name: formatUserName(user),
+                                            period_start,
+                                            period_end,
+                                        },
+                                    });
+                                }
                             }
                         } catch (error) {
                             console.error(`Erreur pour l'utilisateur ${user._id} :`, error);
@@ -876,6 +1004,9 @@
             const showCategories = section === "categories";
             const showReports = section === "reports";
 
+            if (notificationSection) {
+                notificationSection.hidden = !showUsers;
+            }
             if (categorySection) {
                 categorySection.hidden = !showCategories;
             }
@@ -995,6 +1126,121 @@
                 li.appendChild(actions);
                 categoryListEl.appendChild(li);
             });
+        }
+
+        async function loadNotifications() {
+            if (!notificationListEl) {
+                return;
+            }
+            try {
+                const notifications = await apiFetch("/notifications");
+                state.notifications = notifications;
+                renderNotifications();
+            } catch (error) {
+                console.error("Impossible de charger les notifications :", error);
+            }
+        }
+
+        async function clearAllNotifications() {
+            if (!state.notifications.length) {
+                if (notificationListEl) {
+                    notificationListEl.innerHTML = "";
+                }
+                return;
+            }
+            const ids = state.notifications.map((notification) => notification._id);
+            await Promise.all(
+                ids.map((notificationId) =>
+                    apiFetch(`/notifications/${notificationId}`, { method: "DELETE" }).catch((error) => {
+                        console.error("Suppression notification échouée", error);
+                    })
+                )
+            );
+            state.notifications = [];
+            renderNotifications();
+            await loadNotifications();
+        }
+
+        function renderNotifications() {
+            if (!notificationListEl) {
+                return;
+            }
+            notificationListEl.innerHTML = "";
+            if (!state.notifications.length) {
+                const empty = document.createElement("li");
+                empty.className = "category-empty muted";
+                empty.textContent = "Aucune notification";
+                notificationListEl.appendChild(empty);
+                return;
+            }
+
+            state.notifications.forEach((notification) => {
+                const li = document.createElement("li");
+                if (!notification.is_read) {
+                    li.classList.add("unread");
+                }
+
+                const info = document.createElement("header");
+                const title = document.createElement("strong");
+                title.textContent = notification.message || "Notification";
+                info.appendChild(title);
+                const subtitle = document.createElement("span");
+                subtitle.className = "muted";
+                subtitle.textContent = formatRelativeTime(notification.created_at);
+                info.appendChild(subtitle);
+                li.appendChild(info);
+
+                const actions = document.createElement("div");
+                actions.className = "notification-actions";
+
+                const openButton = document.createElement("button");
+                openButton.type = "button";
+                openButton.dataset.action = "open";
+                openButton.dataset.notificationId = notification._id;
+                openButton.textContent = "Voir";
+                actions.appendChild(openButton);
+
+                const deleteButton = document.createElement("button");
+                deleteButton.type = "button";
+                deleteButton.className = "secondary";
+                deleteButton.dataset.action = "delete";
+                deleteButton.dataset.notificationId = notification._id;
+                deleteButton.textContent = "Supprimer";
+                actions.appendChild(deleteButton);
+
+                li.appendChild(actions);
+                notificationListEl.appendChild(li);
+            });
+        }
+
+        async function createNotification(notification) {
+            try {
+                const payload = {
+                    ...notification,
+                    target_id: notification.target_id != null ? String(notification.target_id) : null,
+                    related_user_id: notification.related_user_id != null ? String(notification.related_user_id) : null,
+                    created_at: notification.created_at || new Date().toISOString(),
+                    is_read: notification.is_read ?? false,
+                };
+                const result = await apiFetch("/notifications", {
+                    method: "POST",
+                    body: JSON.stringify(payload),
+                });
+                const storedNotification = {
+                    ...payload,
+                    _id: result?._id || `${Date.now()}-${Math.random().toString(16).slice(2)}`,
+                };
+                state.notifications = [storedNotification, ...state.notifications];
+                renderNotifications();
+            } catch (error) {
+                console.error("Impossible de créer la notification :", error);
+            }
+        }
+
+        async function deleteNotification(notificationId) {
+            await apiFetch(`/notifications/${notificationId}`, { method: "DELETE" });
+            state.notifications = state.notifications.filter((notification) => notification._id !== notificationId);
+            renderNotifications();
         }
 
         function renderReportHistory() {
@@ -1245,6 +1491,7 @@
             transactions.forEach((transaction) => {
                 const item = document.createElement("div");
                 item.className = `transaction-item ${transaction.type === "debit" ? "debit" : "credit"}`;
+                item.dataset.transactionId = transaction._id;
                 const categoryLabel = getCategoryLabel(transaction.category_id);
                 item.innerHTML = `
                     <strong>${(transaction.relation_type || "").toUpperCase()} • ${(transaction.type || "").toUpperCase()}</strong>
@@ -1271,7 +1518,16 @@
 
                 item.appendChild(actions);
                 transactionsContainer.appendChild(item);
+
+                if (state.highlightTransactionId && state.highlightTransactionId === transaction._id) {
+                    item.classList.add("highlight");
+                    item.scrollIntoView({ behavior: "smooth", block: "center" });
+                    setTimeout(() => {
+                        item.classList.remove("highlight");
+                    }, 4000);
+                }
             });
+            state.highlightTransactionId = null;
         }
 
         function openTransactionDialog(mode, transaction = null) {
@@ -1428,6 +1684,123 @@
             return `${yyyy}-${mm}-${dd}T${hh}:${min}`;
         }
 
+        function formatRelativeTime(value) {
+            if (!value) {
+                return "—";
+            }
+            const date = new Date(value);
+            if (Number.isNaN(date.getTime())) {
+                return value;
+            }
+            const diffMs = Date.now() - date.getTime();
+            const diffSeconds = Math.floor(diffMs / 1000);
+            if (diffSeconds < 60) {
+                return "à l'instant";
+            }
+            const diffMinutes = Math.floor(diffSeconds / 60);
+            if (diffMinutes < 60) {
+                return `il y a ${diffMinutes} min`;
+            }
+            const diffHours = Math.floor(diffMinutes / 60);
+            if (diffHours < 24) {
+                return `il y a ${diffHours} h`;
+            }
+            const diffDays = Math.floor(diffHours / 24);
+            if (diffDays < 7) {
+                return `il y a ${diffDays} j`;
+            }
+            return date.toLocaleString("fr-FR");
+        }
+
+        function formatUserName(user) {
+            if (!user) {
+                return "Utilisateur";
+            }
+            const full = `${user.first_name ?? ""} ${user.last_name ?? ""}`.trim();
+            return full || user.email || user.phone || "Utilisateur";
+        }
+
+        async function ensureUserLoaded(userId) {
+            if (!userId) {
+                return null;
+            }
+            let user = state.users.find((item) => item._id === userId);
+            if (user) {
+                return user;
+            }
+            try {
+                user = await apiFetch(`/users/${userId}`);
+                state.users.push(user);
+                renderUserList();
+                return user;
+            } catch (error) {
+                console.error("Impossible de charger l'utilisateur demandé :", error);
+                throw error;
+            }
+        }
+
+        async function handleNotificationAction(notification) {
+            if (!notification) {
+                return;
+            }
+
+            if (notification.target_type === "user" && notification.target_id) {
+                await ensureUserLoaded(notification.target_id);
+                await selectUser(notification.target_id);
+                setActiveSection("users");
+            } else if (notification.target_type === "transaction" && notification.target_id) {
+                const relatedUserId =
+                    notification.related_user_id || notification.user_id || notification.metadata?.user_id || notification.metadata?.related_user_id;
+                if (relatedUserId) {
+                    state.highlightTransactionId = notification.target_id;
+                    await ensureUserLoaded(relatedUserId);
+                    await selectUser(relatedUserId);
+                    setActiveSection("users");
+                } else {
+                    alert("Impossible de déterminer l'utilisateur associé à la transaction.");
+                }
+            } else if (notification.target_type === "report" && notification.target_id) {
+                try {
+                    const report = await apiFetch(`/reports/${notification.target_id}`);
+                    const relatedUserId = notification.related_user_id || report.user_id || notification.metadata?.user_id;
+                    let relatedUser = null;
+                    if (relatedUserId) {
+                        relatedUser = await ensureUserLoaded(relatedUserId).catch(() => null);
+                    }
+                    const entry = {
+                        id: `notif-${notification._id}`,
+                        period_start: notification.metadata?.period_start || report.period_start,
+                        period_end: notification.metadata?.period_end || report.period_end,
+                        generated_at: report.generated_at || notification.created_at,
+                        items: [
+                            {
+                                user: relatedUser || { first_name: "", last_name: "", email: notification.metadata?.user_email },
+                                report: {
+                                    total_credit: report.total_credit,
+                                    total_debit: report.total_debit,
+                                    net_balance: report.net_balance,
+                                    period_start: report.period_start,
+                                    period_end: report.period_end,
+                                },
+                            },
+                        ],
+                    };
+                    state.reportHistory = state.reportHistory.filter((existing) => existing.id !== entry.id);
+                    state.reportHistory.unshift(entry);
+                    state.selectedReportIndex = 0;
+                    state.reports = entry.items;
+                    renderReportHistory();
+                    renderReportDetail();
+                    setActiveSection("reports");
+                } catch (error) {
+                    console.error("Impossible d'afficher le rapport :", error);
+                    alert("Impossible d'ouvrir le rapport lié à cette notification.");
+                }
+            } else {
+                alert("Cette notification ne contient pas de destination exploitable.");
+            }
+        }
+
         async function handleDeleteUser() {
             if (!state.selectedUserId) {
                 return;
@@ -1485,7 +1858,7 @@
         renderReportHistory();
         renderReportDetail();
 
-        Promise.all([loadUsers(), loadCategories()]).catch((error) => {
+        Promise.all([loadUsers(), loadCategories(), loadNotifications()]).catch((error) => {
             console.error(error);
             alert("Impossible de charger les données initiales : " + error.message);
         });

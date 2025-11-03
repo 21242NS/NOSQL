@@ -396,3 +396,34 @@ def delete_report(report_id):
     if result.deleted_count == 0:
         return jsonify({"error": "Report not found"}), 404
     return jsonify({"message": "Report deleted"}), 200
+@app.route("/api/notifications", methods=["POST"])
+def add_notification():
+    data = request.json
+    notification_id = notifications_collection.insert_one(data).inserted_id
+    return jsonify({"_id": str(notification_id)}), 201
+@app.route("/api/notifications", methods=["GET"])
+def get_notifications():
+    notifications = list(notifications_collection.find().sort("created_at", DESCENDING))
+    serialized_notifications = []
+    for notification in notifications:
+        item = {}
+        for key, value in notification.items():
+            if key == "_id":
+                item["_id"] = str(value)
+            elif isinstance(value, datetime):
+                item[key] = value.isoformat()
+            elif isinstance(value, ObjectId):
+                item[key] = str(value)
+            else:
+                item[key] = value
+        serialized_notifications.append(item)
+    return jsonify(serialized_notifications), 200
+@app.route("/api/notifications/<notification_id>", methods=["DELETE"])
+def delete_notification(notification_id):
+    if not ObjectId.is_valid(notification_id):
+        return jsonify({"error": "Invalid notification id"}), 400
+    notification_oid = ObjectId(notification_id)
+    result = notifications_collection.delete_one({"_id": notification_oid})
+    if result.deleted_count == 0:
+        return jsonify({"error": "Notification not found"}), 404
+    return jsonify({"message": "Notification deleted"}), 200
