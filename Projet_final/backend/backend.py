@@ -41,6 +41,39 @@ notifications_collection.create_index([("user_id", ASCENDING), ("created_at", DE
 # parameters for password hashing
 ph = PasswordHasher(time_cost=2, memory_cost=65536, parallelism=4)
 pattern = re.compile(r"^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^\w\s]).{8,}$")
+DEFAULT_ADMIN_USERNAME = os.environ.get("DEFAULT_ADMIN_USERNAME", "Nicolas Schell")
+DEFAULT_ADMIN_PASSWORD = os.environ.get("DEFAULT_ADMIN_PASSWORD", "Admin@1234")
+
+
+def ensure_default_admin():
+    """
+    Create a default admin account if none exists.
+    """
+    existing = admins_collection.find_one({"username": DEFAULT_ADMIN_USERNAME})
+    if existing:
+        return
+
+    if not pattern.fullmatch(DEFAULT_ADMIN_PASSWORD):
+        raise ValueError(
+            "The default admin password does not meet complexity requirements."
+        )
+
+    password_hash = ph.hash(DEFAULT_ADMIN_PASSWORD)
+    admin_document = {
+        "username": DEFAULT_ADMIN_USERNAME,
+        "email": os.environ.get("DEFAULT_ADMIN_EMAIL", "21242@ecam.be"),
+        "role": "superadmin",
+        "password_hash": password_hash,
+        "created_at": datetime.utcnow(),
+    }
+    admins_collection.insert_one(admin_document)
+    print(
+        f"Default admin created with username '{DEFAULT_ADMIN_USERNAME}'. "
+        "Change the password after first login."
+    )
+
+
+ensure_default_admin()
 # Functions use in multiple endpoints
 def serialize_user(document):
     ###
@@ -214,11 +247,29 @@ def delete_user(user_id):
     return jsonify({"message": "User deleted"}), 200
 @app.route("/api/transactions", methods=["GET"])
 def get_transactions():
+    filters = {}
     user_id = request.args.get("user_id")
-    if not user_id or not ObjectId.is_valid(user_id):
-        return jsonify({"error": "Invalid or missing user_id parameter"}), 400
-    user_oid = ObjectId(user_id)
-    transactions = list(transactions_collection.find({"user_id": user_oid}).sort("date", DESCENDING))
+    if user_id:
+        if not ObjectId.is_valid(user_id):
+            return jsonify({"error": "Invalid user_id parameter"}), 400
+        filters["user_id"] = ObjectId(user_id)
+    category_id = request.args.get("category_id")
+    if category_id:
+        if not ObjectId.is_valid(category_id):
+            return jsonify({"error": "Invalid category_id parameter"}), 400
+        filters["category_id"] = ObjectId(category_id)
+    date_from = request.args.get("date_from")
+    date_to = request.args.get("date_to")
+    if date_from or date_to:
+        filters["date"] = {}
+        if date_from:
+            filters["date"]["$gte"] = date_from
+        if date_to:
+            filters["date"]["$lte"] = date_to
+        if not filters["date"]:
+            filters.pop("date")
+    transactions_cursor = transactions_collection.find(filters).sort("date", DESCENDING)
+    transactions = list(transactions_cursor)
     serialized = []
     for transaction in transactions:
         item = {}
@@ -244,8 +295,6 @@ def delete_transaction(transaction_id):
     transactions_collection.delete_one({"_id": transaction_oid})
     updated_user = recalculate_user_totals(existing["user_id"])
     return jsonify({"message": "Transaction deleted", "user": updated_user}), 200
-
-
 @app.route("/api/transactions/<transaction_id>", methods=["PUT"])
 def update_transaction(transaction_id):
     if not ObjectId.is_valid(transaction_id):
@@ -322,14 +371,11 @@ def generate_report():
     user_id = data.get("user_id")
     period_start = data.get("period_start")
     period_end = data.get("period_end")
-
     if not user_id or not ObjectId.is_valid(user_id):
         return jsonify({"error": "Invalid or missing user_id"}), 400
     user_oid = ObjectId(user_id)
-
     if not period_start or not period_end:
         return jsonify({"error": "Missing period_start or period_end"}), 400
-
     transactions = list(
         transactions_collection.find(
             {
@@ -338,7 +384,6 @@ def generate_report():
             }
         ).sort("date", DESCENDING)
     )
-
     total_credit = 0.0
     total_debit = 0.0
     for txn in transactions:
@@ -347,7 +392,6 @@ def generate_report():
             total_credit += amount
         elif txn.get("type") == "debit":
             total_debit += amount
-
     report_data = {
         "user_id": user_oid,
         "period_start": period_start,
@@ -357,9 +401,7 @@ def generate_report():
         "net_balance": round(total_credit - total_debit, 2),
         "generated_at": datetime.utcnow()
     }
-
     report_id = reports_collection.insert_one(report_data).inserted_id
-
     serialized_report = {
         key: value
         for key, value in report_data.items()
@@ -367,7 +409,6 @@ def generate_report():
     }
     serialized_report["user_id"] = str(user_oid)
     serialized_report["generated_at"] = report_data["generated_at"].isoformat()
-
     return jsonify({"report_id": str(report_id), "report": serialized_report}), 201
 @app.route("/api/reports/<report_id>", methods=["GET"])
 def get_report(report_id):
@@ -449,11 +490,23 @@ def delete_notification(notification_id):
 # Admin-related endpoints
 @app.route("/api/admins", methods=["POST"])
 def add_admin():
-    data = request.json
-    if not pattern.fullmatch(data["password"]) :
+    data = request.json or {}
+    password = data.get("password")
+    if not password:
+        return jsonify({"error": "Password is required"}), 400
+    if not pattern.fullmatch(password):
         return jsonify({"error": "Password does not meet complexity requirements"}), 400
-    data["password_hash"] = ph.hash(data.pop("password"))
-    admin_id = admins_collection.insert_one(data).inserted_id
+    username = (data.get("username") or "").strip()
+    if not username:
+        return jsonify({"error": "Username is required"}), 400
+    data["password_hash"] = ph.hash(password)
+    data.pop("password", None)
+    data.setdefault("role", "admin")
+    data.setdefault("created_at", datetime.utcnow())
+    try:
+        admin_id = admins_collection.insert_one(data).inserted_id
+    except Exception as exc:
+        return jsonify({"error": str(exc)}), 400
     return jsonify({"_id": str(admin_id)}), 201
 @app.route("/api/admins/<admin_id>", methods=["GET"])
 def get_admin(admin_id):
@@ -481,23 +534,24 @@ def delete_admin(admin_id):
     if result.deleted_count == 0:
         return jsonify({"error": "Admin not found"}), 404
     return jsonify({"message": "Admin deleted"}), 200
-@app.route("/api/admins/<admin_id>", methods=["POST"])
-def admin_login(admin_id):
-    if not ObjectId.is_valid(admin_id):
-        return jsonify({"error": "Invalid admin id"}), 400
-    admin_oid = ObjectId(admin_id)
-    admin = admins_collection.find_one({"_id": admin_oid})
-    if not admin:
-        return jsonify({"error": "Admin not found"}), 404
-    data = request.json
+@app.route("/api/admins/login", methods=["POST"])
+def admin_login():
+    data = request.json or {}
+    username = (data.get("username") or "").strip()
     password = data.get("password")
-    if not password:
-        return jsonify({"error": "Password required"}), 400
+    if not username or not password:
+        return jsonify({"error": "Username and password are required"}), 400
+    admin = admins_collection.find_one({"username": username})
+    if not admin:
+        return jsonify({"error": "Invalid credentials"}), 401
     try:
         ph.verify(admin["password_hash"], password)
-        return jsonify({"message": "Login successful"}), 200
     except VerifyMismatchError:
-        return jsonify({"error": "Invalid password"}), 401
+        return jsonify({"error": "Invalid credentials"}), 401
+    admin_data = serialize_user(admin)
+    if admin_data and "password_hash" in admin_data:
+        admin_data.pop("password_hash", None)
+    return jsonify({"message": "Login successful", "admin": admin_data}), 200
 @app.route("/api/admins/<admin_id>", methods=["PUT"])
 def update_admin(admin_id):
     if not ObjectId.is_valid(admin_id):
@@ -510,4 +564,3 @@ def update_admin(admin_id):
     if result.matched_count == 0:
         return jsonify({"error": "Admin not found"}), 404
     return jsonify({"message": "Admin updated"}), 200
-

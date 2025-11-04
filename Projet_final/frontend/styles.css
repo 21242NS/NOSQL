@@ -1,0 +1,520 @@
+:root {
+    color-scheme: light dark;
+    font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+*,
+*::before,
+*::after {
+    box-sizing: border-box;
+}
+
+body {
+    margin: 0;
+    min-height: 100vh;
+    background: #1f2933;
+    color: #f5f7fa;
+}
+
+.hidden {
+    display: none !important;
+}
+
+button {
+    background: #3b82f6;
+    color: white;
+    border: none;
+    padding: 0.6rem 1rem;
+    border-radius: 6px;
+    font-size: 0.95rem;
+    cursor: pointer;
+    transition: background 0.2s ease, transform 0.1s ease;
+}
+
+button:hover {
+    background: #2563eb;
+}
+
+button.secondary {
+    background: #4b5563;
+}
+
+button.secondary:hover {
+    background: #374151;
+}
+
+button.small {
+    padding: 0.4rem 0.75rem;
+    font-size: 0.85rem;
+}
+
+button:disabled,
+button[disabled] {
+    cursor: not-allowed;
+    opacity: 0.55;
+    background: #4b5563;
+}
+
+.icon-button {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    background: rgba(255, 255, 255, 0.08);
+}
+
+.icon-button:hover {
+    background: rgba(255, 255, 255, 0.16);
+}
+
+.badge {
+    display: inline-block;
+    padding: 0.3rem 0.6rem;
+    border-radius: 999px;
+    background: rgba(59, 130, 246, 0.25);
+    font-size: 0.75rem;
+    line-height: 1;
+}
+
+.badge.pill {
+    min-width: 1.5rem;
+    text-align: center;
+}
+
+.login-view {
+    position: fixed;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(17, 24, 39, 0.65);
+    padding: 2rem;
+    z-index: 10;
+}
+
+.login-card {
+    background: rgba(15, 23, 42, 0.95);
+    border-radius: 16px;
+    padding: 2.25rem;
+    width: min(420px, 100%);
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.45);
+    display: flex;
+    flex-direction: column;
+    gap: 1.25rem;
+}
+
+.login-card h1 {
+    margin: 0;
+    font-size: 1.75rem;
+    text-align: center;
+}
+
+.login-card p {
+    margin: 0;
+    text-align: center;
+    color: rgba(255, 255, 255, 0.65);
+    font-size: 0.95rem;
+}
+
+.login-card label {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    font-size: 0.95rem;
+}
+
+input,
+textarea,
+select {
+    border-radius: 6px;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    background: rgba(15, 23, 42, 0.65);
+    color: inherit;
+    padding: 0.6rem 0.7rem;
+    font-size: 0.95rem;
+}
+
+.login-error {
+    color: #f87171;
+    font-size: 0.9rem;
+    text-align: center;
+    min-height: 1.2rem;
+}
+
+.app {
+    display: flex;
+    min-height: 100vh;
+}
+
+aside {
+    width: 280px;
+    border-right: 1px solid rgba(255, 255, 255, 0.12);
+    padding: 1.5rem;
+    background: #111b27;
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+}
+
+aside h2 {
+    margin: 0;
+}
+
+main {
+    flex: 1;
+    padding: 2rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+}
+
+.top-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 1.5rem;
+}
+
+.top-info h1 {
+    margin: 0;
+    font-size: 1.9rem;
+}
+
+.top-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.subnav {
+    display: flex;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+}
+
+.subnav button {
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid transparent;
+}
+
+.subnav button.active {
+    background: #3b82f6;
+    border-color: #3b82f6;
+}
+
+.card {
+    background: rgba(17, 27, 39, 0.85);
+    border-radius: 12px;
+    padding: 1.5rem;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
+}
+
+.card p {
+    margin: 0.35rem 0;
+}
+
+.muted {
+    color: rgba(255, 255, 255, 0.65);
+}
+
+ul {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+.user-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+}
+
+.user-list.disabled {
+    pointer-events: none;
+    opacity: 0.45;
+}
+
+.user-list li {
+    padding: 0.65rem 0.75rem;
+    border-radius: 6px;
+    background: rgba(255, 255, 255, 0.05);
+    cursor: pointer;
+    transition: transform 0.1s ease, background 0.2s ease;
+}
+
+.user-list li:hover {
+    transform: translateY(-1px);
+    background: rgba(59, 130, 246, 0.25);
+}
+
+.user-list li.active {
+    background: rgba(59, 130, 246, 0.4);
+}
+
+.category-list,
+.transactions {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.category-list li,
+.transaction-item {
+    display: flex;
+    justify-content: space-between;
+    gap: 0.75rem;
+    padding: 0.75rem 0.9rem;
+    border-radius: 10px;
+    background: rgba(15, 23, 42, 0.85);
+    border-left: 4px solid rgba(59, 130, 246, 0.55);
+}
+
+.transaction-item.debit {
+    border-left-color: #f97316;
+}
+
+.category-actions,
+.transaction-actions {
+    display: flex;
+    gap: 0.5rem;
+}
+
+.empty-state {
+    text-align: center;
+    padding: 2rem 1rem;
+    border: 1px dashed rgba(255, 255, 255, 0.2);
+    border-radius: 12px;
+}
+
+.report-controls {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1rem;
+    margin-top: 1rem;
+    align-items: flex-end;
+}
+
+.report-controls label {
+    flex: 1;
+    min-width: 180px;
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+}
+
+.report-history-wrapper {
+    margin-top: 1.5rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.report-history-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.8rem;
+}
+
+.report-history-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.85rem 1rem;
+    border-radius: 10px;
+    background: rgba(15, 23, 42, 0.65);
+    border: 1px solid transparent;
+    cursor: pointer;
+    transition: transform 0.1s ease, background 0.2s ease, border 0.2s ease;
+}
+
+.report-history-item:hover {
+    transform: translateY(-1px);
+    background: rgba(59, 130, 246, 0.25);
+}
+
+.report-history-item.active {
+    border-color: #3b82f6;
+    background: rgba(59, 130, 246, 0.35);
+}
+
+.report-detail {
+    margin-top: 1.5rem;
+}
+
+.report-detail-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 1rem;
+    margin-bottom: 1rem;
+}
+
+.table-wrapper {
+    overflow-x: auto;
+}
+
+table {
+    width: 100%;
+    border-collapse: collapse;
+    background: rgba(15, 23, 42, 0.65);
+    border-radius: 12px;
+    overflow: hidden;
+}
+
+thead {
+    background: rgba(255, 255, 255, 0.06);
+}
+
+th,
+td {
+    padding: 0.75rem;
+    text-align: left;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+tbody tr:last-child td {
+    border-bottom: none;
+}
+
+.notification-panel {
+    position: fixed;
+    top: 1.5rem;
+    right: 1.5rem;
+    width: min(360px, 90vw);
+    background: rgba(11, 20, 32, 0.95);
+    border-radius: 16px;
+    box-shadow: 0 20px 45px rgba(0, 0, 0, 0.55);
+    border: 1px solid rgba(59, 130, 246, 0.25);
+    padding: 1.25rem;
+    display: none;
+    z-index: 9;
+}
+
+.notification-panel.open {
+    display: block;
+}
+
+.notification-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 0.75rem;
+    margin-bottom: 1rem;
+}
+
+.notification-header-actions {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+}
+
+.notification-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    max-height: 60vh;
+    overflow-y: auto;
+    padding-right: 0.35rem;
+}
+
+.notification-list li {
+    display: flex;
+    justify-content: space-between;
+    gap: 0.75rem;
+    padding: 0.75rem 0.9rem;
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.06);
+}
+
+.global-transaction-row {
+    cursor: pointer;
+    transition: background 0.15s ease;
+}
+
+.global-transaction-row:hover {
+    background: rgba(59, 130, 246, 0.12);
+}
+
+.notification-list li.unread {
+    border: 1px solid rgba(59, 130, 246, 0.45);
+    background: rgba(59, 130, 246, 0.2);
+}
+
+.notification-list header {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+.notification-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+}
+
+dialog {
+    border: none;
+    border-radius: 12px;
+    padding: 1.5rem;
+    background: #111b27;
+    color: inherit;
+    max-width: 450px;
+    width: min(100%, 450px);
+}
+
+dialog::backdrop {
+    background: rgba(15, 23, 42, 0.75);
+}
+
+form {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+label {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+    font-size: 0.9rem;
+}
+
+.actions {
+    display: flex;
+    gap: 0.75rem;
+    justify-content: flex-end;
+}
+
+@media (max-width: 1060px) {
+    .app {
+        flex-direction: column;
+    }
+
+    aside {
+        width: 100%;
+        border-right: none;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+        flex-direction: row;
+        flex-wrap: wrap;
+        gap: 1rem;
+    }
+
+    .user-list {
+        width: 100%;
+    }
+
+    main {
+        padding: 1.5rem;
+    }
+
+    .notification-panel {
+        top: auto;
+        right: 1rem;
+        bottom: 1rem;
+        width: min(360px, 95vw);
+    }
+}
+
+.transactions-table tbody tr.highlight {
+    outline: 2px solid rgba(59, 130, 246, 0.6);
+}
