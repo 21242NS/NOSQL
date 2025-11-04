@@ -1,3 +1,4 @@
+# Import necessary libraries for backend.py
 import os
 from datetime import datetime
 from pymongo import ASCENDING, DESCENDING, MongoClient
@@ -6,6 +7,12 @@ from flask import Flask, request, jsonify
 from bson.objectid import ObjectId
 from flask_cors import CORS
 from cache import get_cache, set_cache, delete_cache
+from argon2 import PasswordHasher
+from argon2.exceptions import VerifyMismatchError
+import re 
+
+
+# MongoDB connection setup
 uri = "mongodb://mongo:27017/financialdb"
 client = MongoClient(uri, server_api=ServerApi('1'))
 app = Flask(__name__)
@@ -16,7 +23,7 @@ try:
 except Exception as e:
     print(e)
 mongo_db = client["financialdb"]
-# Collections according to the schema definition.
+# Collections of the project
 users_collection = mongo_db["users"]
 transactions_collection = mongo_db["transactions"]
 categories_collection = mongo_db["categories"]
@@ -31,9 +38,14 @@ categories_collection.create_index("name", unique=True)
 admins_collection.create_index("username", unique=True)
 reports_collection.create_index([("period_start", ASCENDING), ("period_end", ASCENDING)])
 notifications_collection.create_index([("user_id", ASCENDING), ("created_at", DESCENDING)])
-
-
+# parameters for password hashing
+ph = PasswordHasher(time_cost=2, memory_cost=65536, parallelism=4)
+pattern = re.compile(r"^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^\w\s]).{8,}$")
+# Functions use in multiple endpoints
 def serialize_user(document):
+    ###
+    # Function to serialize a user document from MongoDB to a JSON-compatible dict
+    ###
     if not document:
         return None
     serialized = {}
@@ -50,6 +62,9 @@ def serialize_user(document):
 
 
 def recalculate_user_totals(user_oid: ObjectId):
+    ### 
+    # Function to recalculate the total creances, debts, and argent_recolte for a user
+    ###
     pipeline = [
         {"$match": {"user_id": user_oid}},
         {
@@ -99,6 +114,7 @@ def recalculate_user_totals(user_oid: ObjectId):
     return serialize_user(updated_user)
 
 
+# User-related endpoints and transactions
 @app.route("/api/users", methods=["POST"])
 def add_user():
     data = request.json
@@ -249,6 +265,19 @@ def update_transaction(transaction_id):
     transactions_collection.update_one({"_id": transaction_oid}, {"$set": data})
     updated_user = recalculate_user_totals(existing["user_id"])
     return jsonify({"message": "Transaction updated", "user": updated_user}), 200
+@app.route("/api/users/<user_id>", methods=["PUT"])
+def update_user(user_id):
+    if not ObjectId.is_valid(user_id):
+        return jsonify({"error": "Invalid user id"}), 400
+    user_oid = ObjectId(user_id)
+    data = request.json or {}
+    result = users_collection.update_one({"_id": user_oid}, {"$set": data})
+    if result.matched_count == 0:
+        return jsonify({"error": "User not found"}), 404
+    delete_cache(f"user:{user_id}")
+    delete_cache("users:list")
+    return jsonify({"message": "User updated"}), 200
+# Category-related endpoints
 @app.route("/api/categories", methods=["GET"])
 def get_categories():
     categories = list(categories_collection.find())
@@ -286,18 +315,7 @@ def update_category(category_id):
     if result.matched_count == 0:
         return jsonify({"error": "Category not found"}), 404
     return jsonify({"message": "Category updated"}), 200
-@app.route("/api/users/<user_id>", methods=["PUT"])
-def update_user(user_id):
-    if not ObjectId.is_valid(user_id):
-        return jsonify({"error": "Invalid user id"}), 400
-    user_oid = ObjectId(user_id)
-    data = request.json or {}
-    result = users_collection.update_one({"_id": user_oid}, {"$set": data})
-    if result.matched_count == 0:
-        return jsonify({"error": "User not found"}), 404
-    delete_cache(f"user:{user_id}")
-    delete_cache("users:list")
-    return jsonify({"message": "User updated"}), 200
+# Report-related endpoints
 @app.route("/api/reports/generate", methods=["POST"])
 def generate_report():
     data = request.json
@@ -396,6 +414,7 @@ def delete_report(report_id):
     if result.deleted_count == 0:
         return jsonify({"error": "Report not found"}), 404
     return jsonify({"message": "Report deleted"}), 200
+# Notification-related endpoints
 @app.route("/api/notifications", methods=["POST"])
 def add_notification():
     data = request.json
@@ -427,3 +446,68 @@ def delete_notification(notification_id):
     if result.deleted_count == 0:
         return jsonify({"error": "Notification not found"}), 404
     return jsonify({"message": "Notification deleted"}), 200
+# Admin-related endpoints
+@app.route("/api/admins", methods=["POST"])
+def add_admin():
+    data = request.json
+    if not pattern.fullmatch(data["password"]) :
+        return jsonify({"error": "Password does not meet complexity requirements"}), 400
+    data["password_hash"] = ph.hash(data.pop("password"))
+    admin_id = admins_collection.insert_one(data).inserted_id
+    return jsonify({"_id": str(admin_id)}), 201
+@app.route("/api/admins/<admin_id>", methods=["GET"])
+def get_admin(admin_id):
+    if not ObjectId.is_valid(admin_id):
+        return jsonify({"error": "Invalid admin id"}), 400
+    admin_oid = ObjectId(admin_id)
+    admin = admins_collection.find_one({"_id": admin_oid})
+    if not admin:
+        return jsonify({"error": "Admin not found"}), 404
+    serialized_admin = {}
+    for key, value in admin.items():
+        if key == "_id":
+            serialized_admin["_id"] = str(value)
+        elif key == "password_hash":
+            continue
+        else:
+            serialized_admin[key] = value
+    return jsonify(serialized_admin), 200
+@app.route("/api/admins/<admin_id>", methods=["DELETE"])
+def delete_admin(admin_id):
+    if not ObjectId.is_valid(admin_id):
+        return jsonify({"error": "Invalid admin id"}), 400
+    admin_oid = ObjectId(admin_id)
+    result = admins_collection.delete_one({"_id": admin_oid})
+    if result.deleted_count == 0:
+        return jsonify({"error": "Admin not found"}), 404
+    return jsonify({"message": "Admin deleted"}), 200
+@app.route("/api/admins/<admin_id>", methods=["POST"])
+def admin_login(admin_id):
+    if not ObjectId.is_valid(admin_id):
+        return jsonify({"error": "Invalid admin id"}), 400
+    admin_oid = ObjectId(admin_id)
+    admin = admins_collection.find_one({"_id": admin_oid})
+    if not admin:
+        return jsonify({"error": "Admin not found"}), 404
+    data = request.json
+    password = data.get("password")
+    if not password:
+        return jsonify({"error": "Password required"}), 400
+    try:
+        ph.verify(admin["password_hash"], password)
+        return jsonify({"message": "Login successful"}), 200
+    except VerifyMismatchError:
+        return jsonify({"error": "Invalid password"}), 401
+@app.route("/api/admins/<admin_id>", methods=["PUT"])
+def update_admin(admin_id):
+    if not ObjectId.is_valid(admin_id):
+        return jsonify({"error": "Invalid admin id"}), 400
+    admin_oid = ObjectId(admin_id)
+    data = request.json or {}
+    if "password" in data:
+        data["password_hash"] = ph.hash(data.pop("password"))
+    result = admins_collection.update_one({"_id": admin_oid}, {"$set": data})
+    if result.matched_count == 0:
+        return jsonify({"error": "Admin not found"}), 404
+    return jsonify({"message": "Admin updated"}), 200
+
