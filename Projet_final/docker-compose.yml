@@ -12,6 +12,9 @@ services:
       MONGODB_URI: mongodb://mongo:27017/financialdb
       REDIS_HOST: redis
       REDIS_PORT: 6379
+      DEFAULT_ADMIN_USERNAME: Nicolas Schell
+      DEFAULT_ADMIN_PASSWORD: Admin@1234
+      DEFAULT_ADMIN_EMAIL: 21242@ecam.be
     depends_on:
       - mongo
       - redis
