@@ -98,7 +98,8 @@ def serialize_user(document):
 
 def recalculate_user_totals(user_oid: ObjectId):
     ### 
-    # Function to recalculate the total creances, debts, and argent_recolte for a user
+    # Function to recalculate the total creances, debts, and argent_recolte for a user 
+    # We use it when transactions are added, updated, or deleted.
     ###
     pipeline = [
         {"$match": {"user_id": user_oid}},
@@ -142,7 +143,6 @@ def recalculate_user_totals(user_oid: ObjectId):
             }
         },
     )
-
     updated_user = users_collection.find_one({"_id": user_oid})
     delete_cache("users:list")
     delete_cache(f"user:{str(user_oid)}")
@@ -154,7 +154,7 @@ def recalculate_user_totals(user_oid: ObjectId):
 def add_user():
     data = request.json
     user_id = users_collection.insert_one(data).inserted_id
-    delete_cache("users:list")  # Invalidate the cache for the user list
+    delete_cache("users:list") 
     return jsonify({"_id": str(user_id)}), 201
 @app.route("/api/users", methods=["GET"])
 def get_users():
@@ -178,21 +178,26 @@ def get_user(user_id):
     return jsonify({"error": "User not found"}), 404
 @app.route("/api/users/<user_id>/transaction", methods=["PUT"])
 def update_user_dept(user_id):
+    """
+    We use this endpoint to update a user's debt or creance when we want to add a transaction
+    at the same time. So the payload can contain both user fields to update and a transaction object.
+    """
+
     payload = request.json or {}
 
-    if not isinstance(payload, dict):
+    if not isinstance(payload, dict): # Check if payload is a dictionary 
         return jsonify({"error": "Invalid payload format"}), 400
 
-    if not ObjectId.is_valid(user_id):
+    if not ObjectId.is_valid(user_id): # Check if user_id is a valid ObjectId
         return jsonify({"error": "Invalid user id"}), 400
 
     user_oid = ObjectId(user_id)
-    transaction_data = payload.pop("transaction", None)
-    if transaction_data and not isinstance(transaction_data, dict):
+    transaction_data = payload.pop("transaction", None) # Extract transaction data if present
+    if transaction_data and not isinstance(transaction_data, dict): # Check if transaction data is a dictionary
         return jsonify({"error": "Invalid transaction format"}), 400
-    user_update_data = payload
+    user_update_data = payload 
 
-    if not user_update_data and not transaction_data:
+    if not user_update_data and not transaction_data: # Ensure that we update the user and add a transaction
         return jsonify({"error": "No update data supplied"}), 400
 
     user_exists = users_collection.find_one({"_id": user_oid})
@@ -203,12 +208,12 @@ def update_user_dept(user_id):
         users_collection.update_one({"_id": user_oid}, {"$set": user_update_data})
 
     transaction_id = None
-    if transaction_data:
+    if transaction_data: # If transaction data is provided, insert the transaction
         transaction_document = {key: value for key, value in transaction_data.items() if key != "_id"}
         transaction_document["user_id"] = user_oid
 
         category_id = transaction_document.get("category_id")
-        if category_id:
+        if category_id: # Validate category_id if provided
             if not ObjectId.is_valid(category_id):
                 return jsonify({"error": "Invalid category id"}), 400
             transaction_document["category_id"] = ObjectId(category_id)
@@ -216,7 +221,7 @@ def update_user_dept(user_id):
         if "date" not in transaction_document or not transaction_document["date"]:
             transaction_document["date"] = datetime.utcnow().isoformat() + "Z"
 
-        transaction_id = str(transactions_collection.insert_one(transaction_document).inserted_id)
+        transaction_id = str(transactions_collection.insert_one(transaction_document).inserted_id) 
 
     delete_cache(f"user:{user_id}")
     delete_cache("users:list")
@@ -227,9 +232,9 @@ def update_user_dept(user_id):
     if transaction_id:
         messages.append("Transaction recorded")
 
-    if transaction_id:
+    if transaction_id: # Recalculate user totals if a transaction was added
         updated_user = recalculate_user_totals(user_oid)
-    else:
+    else: 
         updated_user = serialize_user(users_collection.find_one({"_id": user_oid}))
 
     response = {"message": " and ".join(messages), "user": updated_user}
@@ -249,31 +254,32 @@ def delete_user(user_id):
     return jsonify({"message": "User deleted"}), 200
 @app.route("/api/transactions", methods=["GET"])
 def get_transactions():
+    """ Endpoint to get all transactions with optional filters such as user_id, category_id, date range """
     filters = {}
     user_id = request.args.get("user_id")
-    if user_id:
+    if user_id: # If user_id filter is provided, validate and add to filters
         if not ObjectId.is_valid(user_id):
             return jsonify({"error": "Invalid user_id parameter"}), 400
         filters["user_id"] = ObjectId(user_id)
     category_id = request.args.get("category_id")
-    if category_id:
+    if category_id: # If category_id filter is provided, validate and add to filters
         if not ObjectId.is_valid(category_id):
             return jsonify({"error": "Invalid category_id parameter"}), 400
         filters["category_id"] = ObjectId(category_id)
     date_from = request.args.get("date_from")
     date_to = request.args.get("date_to")
-    if date_from or date_to:
+    if date_from or date_to: # If date range filters are provided, add to filters
         filters["date"] = {}
-        if date_from:
+        if date_from: # Validate and add date_from to filters
             filters["date"]["$gte"] = date_from
-        if date_to:
+        if date_to: # Validate and add date_to to filters
             filters["date"]["$lte"] = date_to
-        if not filters["date"]:
+        if not filters["date"]: # Remove date filter if empty
             filters.pop("date")
-    transactions_cursor = transactions_collection.find(filters).sort("date", DESCENDING)
-    transactions = list(transactions_cursor)
+    transactions_cursor = transactions_collection.find(filters).sort("date", DESCENDING) # Retrieve transactions based on filters
+    transactions = list(transactions_cursor) # Convert cursor to list
     serialized = []
-    for transaction in transactions:
+    for transaction in transactions: # Serialize each transaction for JSON response
         item = {}
         for key, value in transaction.items():
             if key == "_id":
@@ -298,7 +304,8 @@ def delete_transaction(transaction_id):
     updated_user = recalculate_user_totals(existing["user_id"])
     return jsonify({"message": "Transaction deleted", "user": updated_user}), 200
 @app.route("/api/transactions/<transaction_id>", methods=["PUT"])
-def update_transaction(transaction_id):
+def update_transaction(transaction_id): 
+    """ Endpoint to update a transaction """
     if not ObjectId.is_valid(transaction_id):
         return jsonify({"error": "Invalid transaction id"}), 400
     transaction_oid = ObjectId(transaction_id)
@@ -318,6 +325,7 @@ def update_transaction(transaction_id):
     return jsonify({"message": "Transaction updated", "user": updated_user}), 200
 @app.route("/api/users/<user_id>", methods=["PUT"])
 def update_user(user_id):
+    """ Endpoint to update user details other than debt/creance """
     if not ObjectId.is_valid(user_id):
         return jsonify({"error": "Invalid user id"}), 400
     user_oid = ObjectId(user_id)
@@ -369,6 +377,7 @@ def update_category(category_id):
 # Report-related endpoints
 @app.route("/api/reports/generate", methods=["POST"])
 def generate_report():
+    """ Endpoint to generate a financial report for a user over a specified period """
     data = request.json
     user_id = data.get("user_id")
     period_start = data.get("period_start")
@@ -388,13 +397,13 @@ def generate_report():
     )
     total_credit = 0.0
     total_debit = 0.0
-    for txn in transactions:
+    for txn in transactions: # Calculate totals
         amount = float(txn.get("amount", 0.0))
         if txn.get("type") == "credit":
             total_credit += amount
         elif txn.get("type") == "debit":
             total_debit += amount
-    report_data = {
+    report_data = { # Create report document
         "user_id": user_oid,
         "period_start": period_start,
         "period_end": period_end,
@@ -492,17 +501,18 @@ def delete_notification(notification_id):
 # Admin-related endpoints
 @app.route("/api/admins", methods=["POST"])
 def add_admin():
+    """ Endpoint to add a new admin user """
     data = request.json or {}
-    password = data.get("password")
+    password = data.get("password")# Get password from payload
     if not password:
         return jsonify({"error": "Password is required"}), 400
-    if not pattern.fullmatch(password):
+    if not pattern.fullmatch(password): # Validate password complexity with a regex
         return jsonify({"error": "Password does not meet complexity requirements"}), 400
     username = (data.get("username") or "").strip()
     if not username:
         return jsonify({"error": "Username is required"}), 400
-    data["password_hash"] = ph.hash(password)
-    data.pop("password", None)
+    data["password_hash"] = ph.hash(password) # Hash the password
+    data.pop("password", None)# Remove plain password from data
     data.setdefault("role", "admin")
     data.setdefault("created_at", datetime.utcnow())
     try:
@@ -522,7 +532,7 @@ def get_admin(admin_id):
     for key, value in admin.items():
         if key == "_id":
             serialized_admin["_id"] = str(value)
-        elif key == "password_hash":
+        elif key == "password_hash": # Exclude password hash from response
             continue
         else:
             serialized_admin[key] = value
@@ -538,6 +548,7 @@ def delete_admin(admin_id):
     return jsonify({"message": "Admin deleted"}), 200
 @app.route("/api/admins/login", methods=["POST"])
 def admin_login():
+    """ Endpoint for admin login """
     data = request.json or {}
     username = (data.get("username") or "").strip()
     password = data.get("password")
@@ -547,21 +558,29 @@ def admin_login():
     if not admin:
         return jsonify({"error": "Invalid credentials"}), 401
     try:
-        ph.verify(admin["password_hash"], password)
+        ph.verify(admin["password_hash"], password)# Verify password
     except VerifyMismatchError:
         return jsonify({"error": "Invalid credentials"}), 401
     admin_data = serialize_user(admin)
     if admin_data and "password_hash" in admin_data:
-        admin_data.pop("password_hash", None)
+        admin_data.pop("password_hash", None) # Remove password hash from response
     return jsonify({"message": "Login successful", "admin": admin_data}), 200
 @app.route("/api/admins/<admin_id>", methods=["PUT"])
 def update_admin(admin_id):
+    """ Endpoint to update admin details, including password change """
     if not ObjectId.is_valid(admin_id):
         return jsonify({"error": "Invalid admin id"}), 400
     admin_oid = ObjectId(admin_id)
     data = request.json or {}
     if "password" in data:
-        data["password_hash"] = ph.hash(data.pop("password"))
+        password = data.get("password")
+        if not ph.verify(admins_collection.find_one({"_id": admin_oid})["password_hash"], password):
+            return jsonify({"error": "Current password is incorrect"}), 401
+    if "new_password" in data:
+        password = data.pop("new_password")
+        if not pattern.fullmatch(password): # Validate password complexity
+            return jsonify({"error": "Password does not meet complexity requirements"}), 400
+        data["password_hash"] = ph.hash(data.pop("new_password")) # Hash new password
     result = admins_collection.update_one({"_id": admin_oid}, {"$set": data})
     if result.matched_count == 0:
         return jsonify({"error": "Admin not found"}), 404
