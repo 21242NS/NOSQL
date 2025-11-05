@@ -1,30 +1,33 @@
 # Finance Tracker Console
 
-Projet réalisé dans le cadre du cours Realtime Databases, NoSQL, XML – ECAM 2025-2026.
+Projet réalisé dans le cadre du cours *Realtime Databases, NoSQL, XML* – ECAM 2025‑2026.
 
-## 1. Introduction
+---
 
-Finance Tracker Console est une application web de gestion financière destinée à simuler la gestion des finances d'un poste pionnier mais peut etre déclinée a d'autres applications. Elle permet à un administrateur de :
+## 1. Présentation
 
-- Gérer les utilisateurs (création, modification, suppression)
-- Enregistrer leurs transactions (dettes, créances, argent récolté)
-- Créer et filtrer des catégories
-- Générer des rapports financiers sur une période donnée
-- Consulter des notifications automatiques
+Finance Tracker Console est une application web de gestion financière pensée pour un poste pionnier, mais facilement adaptable à d’autres contextes. L’interface administrateur permet :
 
-L’application utilise une base de données NoSQL (MongoDB) et un système de cache Redis pour améliorer les performances.
+- de gérer les utilisateurs (création, modification, suppression) ;
+- d’enregistrer et suivre leurs transactions (créances, dettes, montants récoltés) ;
+- de créer et filtrer des catégories de mouvements ;
+- de générer des rapports financiers par période ;
+- de consulter un flux de notifications automatiques ;
+- d’explorer toutes les transactions via une vue dédiée (tri par date ou catégorie, filtres cumulables).
 
-## 2. Architecture et technologies
+L’application s’appuie sur MongoDB pour le stockage NoSQL et sur Redis pour le cache.
 
-### Structure du projet
+---
+
+## 2. Architecture
 
 ```
 finance-tracker/
 │
 ├── backend/
-│   ├── backend.py              # API Flask principale
-│   ├── cache.py                # Gestion du cache Redis
-│   ├── requirements.txt        # Dépendances Python
+│   ├── backend.py           # API Flask principale
+│   ├── cache.py             # Gestion du cache Redis
+│   ├── requirements.txt     # Dépendances Python
 │   └── Dockerfile
 │
 ├── frontend/
@@ -33,162 +36,183 @@ finance-tracker/
 │   ├── styles.css
 │   └── Dockerfile
 │
-├── docker-compose.yml          # Déploiement multi-conteneurs
+├── docker-compose.yml       # Déploiement multi-conteneurs
 └── README.md
 ```
 
-### Technologies principales
+| Couche             | Technologie                 | Rôle principal                                       |
+|--------------------|-----------------------------|-------------------------------------------------------|
+| Backend            | Flask (Python)              | API REST + logique métier                             |
+| Base de données    | MongoDB                     | Stockage NoSQL des utilisateurs, transactions, rapports |
+| Cache              | Redis                       | Accélération, invalidation et notifications           |
+| Frontend           | HTML / CSS / JavaScript     | Interface administrateur (login, filtres, tableaux)   |
+| Déploiement        | Docker & Docker Compose     | Orchestration multi‑conteneurs                        |
 
-| Composant        | Technologie | Rôle                                |
-|------------------|-------------|-------------------------------------|
-| Backend          | Flask (Python) | API REST                         |
-| Base de données  | MongoDB        | Stockage NoSQL principal          |
-| Cache & sessions | Redis          | Accélération et persistance temporaire |
-| Frontend         | HTML / CSS / JS | Interface utilisateur            |
-| Déploiement      | Docker & Docker Compose | Conteneurisation complète |
+---
 
-## 3. Installation et exécution
+## 3. Installation rapide
 
 ### Prérequis
 
-- Docker et Docker Compose installés
-- Ports 3000 et 5001 disponibles
+- Docker + Docker Compose
+- Ports 3000 (frontend) et 5001 (backend/API) disponibles
 
-### Lancement du projet
+### Démarrage
 
 ```bash
-docker-compose up --build
+docker compose up --build
 ```
 
-- Accès au frontend : <http://localhost:3000>
-- Accès à l’API Flask : <http://localhost:5001>
+- Interface : http://localhost:3000  
+- API : http://localhost:5001  
 
-### Variables d’environnement
+### Variables d’environnement (`docker-compose.yml`)
 
-Ces variables sont définies dans `docker-compose.yml`.
+| Variable                       | Description                 | Valeur par défaut                   |
+|--------------------------------|-----------------------------|-------------------------------------|
+| `MONGODB_URI`                  | URI MongoDB                 | `mongodb://mongo:27017/financialdb` |
+| `REDIS_HOST`                   | Hôte Redis                  | `redis`                             |
+| `DEFAULT_ADMIN_USERNAME`       | Identifiant admin initial   | `admin`                             |
+| `DEFAULT_ADMIN_PASSWORD`       | Mot de passe admin initial  | `Admin@1234`                        |
+| `DEFAULT_ADMIN_EMAIL`          | Email admin initial         | `admin@example.com`                 |
 
-| Nom                     | Description                 | Valeur par défaut                          |
-|-------------------------|-----------------------------|--------------------------------------------|
-| `MONGODB_URI`           | URI de connexion MongoDB    | `mongodb://mongo:27017/financialdb`        |
-| `REDIS_HOST`            | Hôte Redis                  | `redis`                                    |
-| `DEFAULT_ADMIN_USERNAME`| Admin par défaut            | `Nicolas Schell`                           |
-| `DEFAULT_ADMIN_PASSWORD`| Mot de passe admin          | `Admin@1234`                               |
-| `DEFAULT_ADMIN_EMAIL`   | Email admin                 | `21242@ecam.be`                            |
+Au premier lancement, un compte administrateur est automatiquement créé avec ces identifiants.
+Un script d'initialisation côté backend s’exécute au démarrage pour injecter cet admin de base ; sans lui, l’interface reste inaccessible.
 
-### Données initiales
+---
 
-Au démarrage, la base MongoDB est automatiquement peuplée avec un utilisateur administrateur. Des données de test peuvent ensuite être ajoutées via l’interface graphique.
+## 4. Fonctionnalités
 
-## 4. Fonctionnalités principales
+| Module                  | Description                                                                                   |
+|-------------------------|-----------------------------------------------------------------------------------------------|
+| Authentification        | Connexion administrateur obligatoire.                                                         |
+| Utilisateurs            | CRUD complet avec recalcul automatique des soldes et notifications lors des ajouts.          |
+| Transactions (profil)   | Ajout, modification, suppression ; mise en avant depuis une notification.                     |
+| Transactions (globales) | Vue consolidée avec tri par date/catégorie, filtres cumulables, clic pour ouvrir l’utilisateur.|
+| Catégories              | Gestion et réutilisation dans les filtres et formulaires.                                    |
+| Rapports financiers     | Génération par période avec historique consultable.                                           |
+| Notifications           | Panneau latéral (fermeture par clic extérieur, bouton, touche Échap) + badge d’indication.   |
+| Cache Redis             | Invalidation ciblée (profils, listes) pour accélérer les réponses.                           |
 
-| Fonction            | Description                                                         |
-|---------------------|---------------------------------------------------------------------|
-| Authentification    | Connexion administrateur (identifiants initiaux dans `docker-compose.yml`) |
-| Gestion utilisateurs| CRUD complet : ajout, édition, suppression                          |
-| Transactions        | Enregistrement, modification, suppression filtrage par catégorie, date et type              |
-| Catégories          | Création et gestion de catégories de transaction                    |
-| Rapports financiers | Génération de rapports par période (début/fin)                      |
-| Notifications       | Système de notification côté client                                 |
-| Cache Redis         | Réduction du temps de réponse pour les requêtes fréquentes          |
+---
 
-## 5. Choix du NoSQL et modélisation
+## 5. Modélisation NoSQL
 
-### Base utilisée
-
-MongoDB : base orientée documents, adaptée aux structures dynamiques et aux données non relationnelles. Chaque utilisateur contient des sous-documents pour ses transactions, permettant une lecture rapide.
-
-### Exemple de schéma
+MongoDB (base orientée documents) est retenu pour sa flexibilité et sa scalabilité horizontale.
 
 ```json
-user{
+{
   "_id": ObjectId("..."),
   "first_name": "Lucas",
   "last_name": "Dupont",
   "email": "lucas.dupont@example.com",
   "phone": "+32471234567",
-
   "creances": 300.0,
   "dettes": 150.0,
-  "argent_recolte": 150.0,   // total encaissé (ex: créances - dettes)
-
+  "argent_recolte": 150.0,
   "created_at": "2025-10-27T14:30:00Z",
   "updated_at": "2025-10-27T14:30:00Z"
 }
 ```
 
-### Justification
+Les transactions sont stockées dans une collection dédiée, indexée par utilisateur, date et catégorie pour optimiser la vue globale.
 
-- NoSQL (MongoDB) permet une structure flexible sans schéma fixe.
-- Idéal pour des entités comme les transactions ou les rapports dont la structure peut évoluer.
-- La scalabilité horizontale est native via le sharding MongoDB.
+---
 
 ## 6. Déploiement Docker
 
-Un fichier `docker-compose.yml` permet de tout lancer :
-
 ```yaml
 version: "3.9"
+
 services:
   backend:
     build: ./backend
-    ports: ["5001:5000"]
+    ports:
+      - "5001:5000"
     environment:
-      - MONGODB_URI=mongodb://mongo:27017/financialdb
-      - REDIS_HOST=redis
-    depends_on: [mongo, redis]
+      FLASK_ENV: development
+      MONGODB_URI: mongodb://mongo:27017/financialdb
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      DEFAULT_ADMIN_USERNAME: admin
+      DEFAULT_ADMIN_PASSWORD: Admin@1234
+      DEFAULT_ADMIN_EMAIL: admin@example.com
+    depends_on:
+      - mongo
+      - redis
+    volumes:
+      - ./backend:/app
+
   frontend:
     build: ./frontend
-    ports: ["3000:80"]
-    depends_on: [backend]
+    ports:
+      - "3000:80"
+    depends_on:
+      - backend
+
   mongo:
     image: mongo:6.0
-    volumes: [mongo-data:/data/db]
+    volumes:
+      - mongo-data:/data/db
+
   redis:
     image: redis:7-alpine
+    volumes:
+      - redis-data:/data
+
 volumes:
   mongo-data:
+  redis-data:
 ```
 
-Démarrage complet :
+---
 
-```bash
-docker-compose up --build
-```
+## 7. Maintien et diagnostic
 
-## 7. Tests et dépannage
+| Commande                                   | Utilité                                    |
+|-------------------------------------------|--------------------------------------------|
+| `docker ps`                               | Vérifie l’état des conteneurs              |
+| `docker compose logs backend`             | Suit les logs Flask / création de l’admin  |
+| `docker exec -it finance-mongo mongosh`   | Ouvre un shell MongoDB                     |
+| `docker compose down -v`                  | Arrête tout et supprime les volumes        |
 
-| Commande                          | Utilité                                      |
-|----------------------------------|----------------------------------------------|
-| `docker ps`                      | Vérifie les conteneurs actifs                 |
-| `docker-compose logs backend`    | Affiche les logs Flask                        |
-| `docker exec -it finance-mongo mongosh` | Accès au shell MongoDB               |
-| `docker-compose down -v`         | Stoppe et supprime les volumes                |
+**Erreurs courantes**  
+- `400 Bad Request` : JSON invalide.  
+- `401 Unauthorized` : identifiants admin incorrects.  
+- `Connection refused` : vérifier que Mongo et Redis tournent (`docker ps`).
 
-### Erreurs courantes
+---
 
-- `400 Bad Request` : mauvais format de requête JSON.
-- `Connection refused` : Mongo ou Redis non démarré.
-- `Unauthorized` : mauvais mot de passe admin.
+## 8. Usage d’outils IA
 
-## 8. Utilisation d’outils IA
+| Élément               | Détails                                                                                                                     |
+|-----------------------|-----------------------------------------------------------------------------------------------------------------------------|
+| Outils                | ChatGPT (GPT‑5, OpenAI), Codex                                                                                               |
+| Rôle                  | Génération du front-end de test, corrections ponctuelles backend, structuration des idées, aide au setup Docker.            |
+| Prompt type           | « Crée un front-end fonctionnel listant les utilisateurs, affichant leurs détails, avec un formulaire modal pour ajouter des transactions… » |
+| Erreurs rencontrées   | `Failed to fetch` côté front, erreurs de build Docker.                                                                      |
+| Retour d’expérience   | L’IA a servi de support pour clarifier des notions NoSQL, prendre du recul et accélérer l’implémentation (travail individuel). |
 
-Conformément aux règles du cours :
-
-| Élément        | Détails                                                                 |
-|----------------|-------------------------------------------------------------------------|
-| Outil utilisé  | ChatGPT (GPT-5, OpenAI), Codex                                                |
-| Rôle de l’IA   | Nous avons utiliser de l'IA dans la confection de notre frontend, et de temps-en temps dans le backend ou il m'aidait a corriger des erreurs rencontré. Il nous a aussi aidé a structurer nos idée et nous permettre de mieux les visualisé. Il m'a aussi aidé a faire correctement le setup de docker.|
-| Prompts principaux | « je veux que tu me crée un front-end pour tester mon backedn ce front-end ne doit pas specialement etre beau mais il doit etre fonctionnel je vois bien un menu avec tout les noms des gent ou on peut clique pour sur un profil pour voir toutes les informations de cette personne en dessous je veux un bouton pour ajouter un utilisateur, dans le menus specialisée d'un seul utilisateur je veux etre capaple d'ajouter une transaction qui ouvre une micro-fenetre ou je dis le types de transaction avec un menu déroulant, le montant et tout ce qui nécessaaire dans la data attendue et puis un submit qui me permet d'ajouter cette transaction et de mettre a jour le profil utilisateur avec cette nouvelle transaction » |
-| Erreurs rencontrées |  Erreur lors de la création : Failed to fetch,  erreur dans le build Docker                     |
-| Réflexion      | L’usage de l’IA a permis de mieux structurer mes idées, surtout etant seul a faire ce projet, il m'aidait aussi a prendre du recul et mieux comprendre certaines notions de NOSQL. |
+---
 
 ## 9. Équipe
 
-| Nom             | Rôle                | Email             |
-|-----------------|---------------------|-------------------|
-| Nicolas Schell  | Backend & Docker    | 21242@ecam.be     |
+| Nom            | Rôle principal              | Email         |
+|----------------|-----------------------------|---------------|
+| Nicolas Schell | Backend, Docker, intégration front | 21242@ecam.be |
 
+---
+
+
+## 10. Améliorations futures
+
+- Ajout d’un système d’authentification multi-utilisateur.
+- Exportation des rapports au format PDF.
+- Intégration de graphiques interactifs (Chart.js).
+- Optimisation du cache Redis pour les statistiques temps réel.
+
+---
 
 ## Licence
 
-Projet académique – ECAM Brussels Engineering School. © 2025 – Tous droits réservés.
+Projet académique – ECAM Brussels Engineering School. © 2025 – Tous droits réservés.
