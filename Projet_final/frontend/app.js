@@ -610,6 +610,12 @@ function populateAdminProfileForm() {
     if (adminEmailInput) {
         adminEmailInput.value = state.admin.email || "";
     }
+    if (adminProfileForm.elements.current_password) {
+        adminProfileForm.elements.current_password.value = "";
+    }
+    if (adminProfileForm.elements.new_password) {
+        adminProfileForm.elements.new_password.value = "";
+    }
 }
 
 function getUserLabel(userId) {
