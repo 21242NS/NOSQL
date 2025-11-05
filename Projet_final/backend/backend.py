@@ -1,15 +1,16 @@
 # Import necessary libraries for backend.py
 import os
 from datetime import datetime
-from pymongo import ASCENDING, DESCENDING, MongoClient
+from pymongo import ASCENDING, DESCENDING, MongoClient # For MongoDB operations
+from pymongo.errors import DuplicateKeyError # For handling duplicate key errors
 from pymongo.server_api import ServerApi
 from flask import Flask, request, jsonify
 from bson.objectid import ObjectId
-from flask_cors import CORS
-from cache import get_cache, set_cache, delete_cache
-from argon2 import PasswordHasher
-from argon2.exceptions import VerifyMismatchError
-import re 
+from flask_cors import CORS # For handling Cross-Origin Resource Sharing
+from cache import get_cache, set_cache, delete_cache # For caching mechanisms
+from argon2 import PasswordHasher # For secure password hashing
+from argon2.exceptions import VerifyMismatchError # For handling password verification errors
+import re # For regex operations
 
 
 # MongoDB connection setup
@@ -520,6 +521,16 @@ def add_admin():
     except Exception as exc:
         return jsonify({"error": str(exc)}), 400
     return jsonify({"_id": str(admin_id)}), 201
+@app.route("/api/admins", methods=["GET"])
+def list_admins():
+    """Return the list of all admins (without password hash)."""
+    admins = []
+    for admin in admins_collection.find().sort("created_at", DESCENDING):
+        serialized = serialize_user(admin)
+        if serialized:
+            serialized.pop("password_hash", None)
+            admins.append(serialized)
+    return jsonify(admins), 200
 @app.route("/api/admins/<admin_id>", methods=["GET"])
 def get_admin(admin_id):
     if not ObjectId.is_valid(admin_id):
@@ -542,6 +553,12 @@ def delete_admin(admin_id):
     if not ObjectId.is_valid(admin_id):
         return jsonify({"error": "Invalid admin id"}), 400
     admin_oid = ObjectId(admin_id)
+    admin = admins_collection.find_one({"_id": admin_oid})
+    if not admin:
+        return jsonify({"error": "Admin not found"}), 404
+    total_admins = admins_collection.count_documents({})
+    if total_admins <= 1:
+        return jsonify({"error": "Cannot delete the last remaining administrator"}), 400
     result = admins_collection.delete_one({"_id": admin_oid})
     if result.deleted_count == 0:
         return jsonify({"error": "Admin not found"}), 404
@@ -571,17 +588,54 @@ def update_admin(admin_id):
     if not ObjectId.is_valid(admin_id):
         return jsonify({"error": "Invalid admin id"}), 400
     admin_oid = ObjectId(admin_id)
-    data = request.json or {}
-    if "password" in data:
-        password = data.get("password")
-        if not ph.verify(admins_collection.find_one({"_id": admin_oid})["password_hash"], password):
-            return jsonify({"error": "Current password is incorrect"}), 401
-    if "new_password" in data:
-        password = data.pop("new_password")
-        if not pattern.fullmatch(password): # Validate password complexity
-            return jsonify({"error": "Password does not meet complexity requirements"}), 400
-        data["password_hash"] = ph.hash(data.pop("new_password")) # Hash new password
-    result = admins_collection.update_one({"_id": admin_oid}, {"$set": data})
-    if result.matched_count == 0:
+    admin = admins_collection.find_one({"_id": admin_oid})
+    if not admin:
         return jsonify({"error": "Admin not found"}), 404
-    return jsonify({"message": "Admin updated"}), 200
+    data = request.json or {}
+
+    updates = {}
+
+    if "username" in data:
+        username = (data.get("username") or "").strip()
+        if not username:
+            return jsonify({"error": "Username cannot be empty"}), 400
+        updates["username"] = username
+
+    if "email" in data:
+        email = (data.get("email") or "").strip()
+        if not email:
+            return jsonify({"error": "Email cannot be empty"}), 400
+        updates["email"] = email
+
+    if "role" in data:
+        role = (data.get("role") or "").strip()
+        updates["role"] = role or admin.get("role", "admin")
+
+    current_password = data.get("current_password")
+    new_password = data.get("new_password")
+    if new_password:
+        if not current_password:
+            return jsonify({"error": "Current password is required to set a new password"}), 400
+        try:
+            ph.verify(admin["password_hash"], current_password)
+        except VerifyMismatchError:
+            return jsonify({"error": "Current password is incorrect"}), 401
+        if not pattern.fullmatch(new_password):
+            return jsonify({"error": "New password does not meet complexity requirements"}), 400
+        updates["password_hash"] = ph.hash(new_password)
+
+    if not updates:
+        return jsonify({"message": "No changes applied"}), 200
+
+    updates["updated_at"] = datetime.utcnow()
+
+    try:
+        admins_collection.update_one({"_id": admin_oid}, {"$set": updates})
+    except DuplicateKeyError:
+        return jsonify({"error": "Username already exists"}), 409
+
+    refreshed = admins_collection.find_one({"_id": admin_oid})
+    admin_payload = serialize_user(refreshed)
+    if admin_payload:
+        admin_payload.pop("password_hash", None)
+    return jsonify({"message": "Admin updated", "admin": admin_payload}), 200
