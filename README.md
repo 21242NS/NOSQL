@@ -1,10 +1,10 @@
 # Finance Tracker Console
 
-Projet réalisé dans le cadre du cours Introduction to NoSQL Database – ECAM 2025-2026.
+Projet réalisé dans le cadre du cours Realtime Databases, NoSQL, XML – ECAM 2025-2026.
 
 ## 1. Introduction
 
-Finance Tracker Console est une application web de gestion financière destinée à simuler la gestion interne d’une entreprise. Elle permet à un administrateur de :
+Finance Tracker Console est une application web de gestion financière destinée à simuler la gestion des finances d'un poste pionnier mais peut etre déclinée a d'autres applications. Elle permet à un administrateur de :
 
 - Gérer les utilisateurs (création, modification, suppression)
 - Enregistrer leurs transactions (dettes, créances, argent récolté)
@@ -85,7 +85,7 @@ Au démarrage, la base MongoDB est automatiquement peuplée avec un utilisateur 
 |---------------------|---------------------------------------------------------------------|
 | Authentification    | Connexion administrateur (identifiants initiaux dans `docker-compose.yml`) |
 | Gestion utilisateurs| CRUD complet : ajout, édition, suppression                          |
-| Transactions        | Enregistrement et filtrage par catégorie, date et type              |
+| Transactions        | Enregistrement, modification, suppression filtrage par catégorie, date et type              |
 | Catégories          | Création et gestion de catégories de transaction                    |
 | Rapports financiers | Génération de rapports par période (début/fin)                      |
 | Notifications       | Système de notification côté client                                 |
@@ -100,20 +100,19 @@ MongoDB : base orientée documents, adaptée aux structures dynamiques et aux do
 ### Exemple de schéma
 
 ```json
-{
-  "user_id": "u123",
-  "first_name": "Alice",
+user{
+  "_id": ObjectId("..."),
+  "first_name": "Lucas",
   "last_name": "Dupont",
-  "email": "alice@example.com",
-  "transactions": [
-    {
-      "type": "credit",
-      "relation_type": "creance",
-      "amount": 120.0,
-      "category": "Remboursement",
-      "date": "2025-11-05T09:00:00"
-    }
-  ]
+  "email": "lucas.dupont@example.com",
+  "phone": "+32471234567",
+
+  "creances": 300.0,
+  "dettes": 150.0,
+  "argent_recolte": 150.0,   // total encaissé (ex: créances - dettes)
+
+  "created_at": "2025-10-27T14:30:00Z",
+  "updated_at": "2025-10-27T14:30:00Z"
 }
 ```
 
@@ -177,19 +176,18 @@ Conformément aux règles du cours :
 
 | Élément        | Détails                                                                 |
 |----------------|-------------------------------------------------------------------------|
-| Outil utilisé  | ChatGPT (GPT-5, OpenAI)                                                 |
-| Rôle de l’IA   | Assistance à la rédaction de la documentation, génération de modèle Docker et structure Flask |
-| Prompts principaux | « Rédige un README conforme au cahier des charges ECAM NoSQL Project », « Explique la structure du projet Flask-MongoDB-Redis » |
-| Erreurs rencontrées | Mauvais encodage PDF → corrigé manuellement                        |
-| Réflexion      | L’usage de l’IA a permis de mieux structurer la documentation et de comprendre la logique de déploiement multi-conteneurs, tout en approfondissant la modélisation NoSQL. |
+| Outil utilisé  | ChatGPT (GPT-5, OpenAI), Codex                                                |
+| Rôle de l’IA   | Nous avons utiliser de l'IA dans la confection de notre frontend, et de temps-en temps dans le backend ou il m'aidait a corriger des erreurs rencontré. Il nous a aussi aidé a structurer nos idée et nous permettre de mieux les visualisé. Il m'a aussi aidé a faire correctement le setup de docker.|
+| Prompts principaux | « je veux que tu me crée un front-end pour tester mon backedn ce front-end ne doit pas specialement etre beau mais il doit etre fonctionnel je vois bien un menu avec tout les noms des gent ou on peut clique pour sur un profil pour voir toutes les informations de cette personne en dessous je veux un bouton pour ajouter un utilisateur, dans le menus specialisée d'un seul utilisateur je veux etre capaple d'ajouter une transaction qui ouvre une micro-fenetre ou je dis le types de transaction avec un menu déroulant, le montant et tout ce qui nécessaaire dans la data attendue et puis un submit qui me permet d'ajouter cette transaction et de mettre a jour le profil utilisateur avec cette nouvelle transaction » |
+| Erreurs rencontrées |  Erreur lors de la création : Failed to fetch,  erreur dans le build Docker                     |
+| Réflexion      | L’usage de l’IA a permis de mieux structurer mes idées, surtout etant seul a faire ce projet, il m'aidait aussi a prendre du recul et mieux comprendre certaines notions de NOSQL. |
 
 ## 9. Équipe
 
 | Nom             | Rôle                | Email             |
 |-----------------|---------------------|-------------------|
 | Nicolas Schell  | Backend & Docker    | 21242@ecam.be     |
-| [Membre 2]      | Frontend & UI       | –                 |
-| [Membre 3]      | Tests & Documentation | –               |
+
 
 ## Licence
 

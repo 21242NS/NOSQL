@@ -41,14 +41,16 @@ notifications_collection.create_index([("user_id", ASCENDING), ("created_at", DE
 # parameters for password hashing
 ph = PasswordHasher(time_cost=2, memory_cost=65536, parallelism=4)
 pattern = re.compile(r"^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^\w\s]).{8,}$")
+# Default admin account setup
 DEFAULT_ADMIN_USERNAME = os.environ.get("DEFAULT_ADMIN_USERNAME", "Nicolas Schell")
 DEFAULT_ADMIN_PASSWORD = os.environ.get("DEFAULT_ADMIN_PASSWORD", "Admin@1234")
 
 
 def ensure_default_admin():
-    """
-    Create a default admin account if none exists.
-    """
+    ### 
+    #Create a default admin account if none exists.
+    ###
+    
     existing = admins_collection.find_one({"username": DEFAULT_ADMIN_USERNAME})
     if existing:
         return
