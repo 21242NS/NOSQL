@@ -8,6 +8,7 @@ const state = {
     currentUser: null,
     transactions: [],
     categories: [],
+    admins: [],
     reports: [],
     reportHistory: [],
     selectedReportIndex: null,
@@ -22,6 +23,7 @@ const state = {
     },
     allTransactionsSort: "date_desc",
     allTransactionsLoaded: false,
+    adminsLoaded: false,
 };
 
 const loginView = document.getElementById("login-view");
@@ -75,6 +77,16 @@ const allTransactionsFromFilter = document.getElementById("all-transactions-from
 const allTransactionsToFilter = document.getElementById("all-transactions-to");
 const allTransactionsResetButton = document.getElementById("all-transactions-reset");
 const allTransactionsSortSelect = document.getElementById("all-transactions-sort");
+const adminsSection = document.getElementById("admins-section");
+const adminProfileForm = document.getElementById("admin-profile-form");
+const adminUsernameInput = document.getElementById("admin-username");
+const adminEmailInput = document.getElementById("admin-email");
+const adminCountEl = document.getElementById("admin-count");
+const adminTableBody = document.getElementById("admin-table-body");
+const openAddAdminButton = document.getElementById("open-add-admin");
+const adminDialog = document.getElementById("admin-dialog");
+const adminForm = document.getElementById("admin-form");
+const cancelAdminButton = document.getElementById("cancel-admin");
 const openAddUserButton = document.getElementById("open-add-user");
 const editUserButton = document.getElementById("open-edit-user");
 const userTitleEl = userDialog.querySelector("h2");
@@ -139,6 +151,153 @@ if (allTransactionsSortSelect) {
     allTransactionsSortSelect.addEventListener("change", () => {
         state.allTransactionsSort = allTransactionsSortSelect.value || "date_desc";
         renderAllTransactions(state.allTransactions);
+    });
+}
+
+if (openAddAdminButton) {
+    openAddAdminButton.addEventListener("click", () => {
+        if (!adminDialog) {
+            return;
+        }
+        adminForm.reset();
+        adminDialog.showModal();
+    });
+}
+
+if (cancelAdminButton) {
+    cancelAdminButton.addEventListener("click", () => {
+        if (adminDialog) {
+            adminDialog.close();
+        }
+    });
+}
+
+if (adminForm) {
+    adminForm.addEventListener("submit", async (event) => {
+        event.preventDefault();
+        const formData = new FormData(adminForm);
+        const payload = {
+            username: (formData.get("username") || "").trim(),
+            email: (formData.get("email") || "").trim(),
+            password: formData.get("password") || "",
+            role: (formData.get("role") || "admin").trim() || "admin",
+        };
+
+        if (!payload.username || !payload.email || !payload.password) {
+            alert("Merci de remplir tous les champs.");
+            return;
+        }
+
+        try {
+            await apiFetch("/admins", {
+                method: "POST",
+                body: JSON.stringify(payload),
+            });
+            if (adminDialog) {
+                adminDialog.close();
+            }
+            await loadAdmins();
+            alert("Administrateur créé.");
+        } catch (error) {
+            alert("Impossible de créer l'administrateur : " + error.message);
+        }
+    });
+}
+
+if (adminTableBody) {
+    adminTableBody.addEventListener("click", async (event) => {
+        const button = event.target.closest("button[data-admin-id]");
+        if (!button) {
+            return;
+        }
+        const adminId = button.dataset.adminId;
+        if (!adminId) {
+            return;
+        }
+        const remainingAfterDeletion = state.admins.filter((item) => item._id !== adminId);
+        if (!remainingAfterDeletion.length) {
+            alert("Il doit toujours rester au moins un administrateur actif.");
+            return;
+        }
+        if (state.admin && adminId === state.admin._id) {
+            alert("Tu ne peux pas supprimer ton propre compte depuis cette interface.");
+            return;
+        }
+        const admin = state.admins.find((item) => item._id === adminId);
+        const label = admin ? admin.username || admin.email || admin._id : "cet administrateur";
+        const confirmation = window.confirm(`Supprimer ${label} ? Cette action est définitive.`);
+        if (!confirmation) {
+            return;
+        }
+        try {
+            await apiFetch(`/admins/${adminId}`, { method: "DELETE" });
+            await loadAdmins();
+            alert("Administrateur supprimé.");
+        } catch (error) {
+            alert("Impossible de supprimer cet administrateur : " + error.message);
+        }
+    });
+}
+
+if (adminProfileForm) {
+    adminProfileForm.addEventListener("submit", async (event) => {
+        event.preventDefault();
+        if (!state.admin) {
+            return;
+        }
+        const formData = new FormData(adminProfileForm);
+        const payload = {
+            username: (formData.get("username") || "").trim(),
+            email: (formData.get("email") || "").trim(),
+            current_password: formData.get("current_password") || "",
+            new_password: formData.get("new_password") || "",
+        };
+
+        if (!payload.username || !payload.email) {
+            alert("Nom d'utilisateur et email sont obligatoires.");
+            return;
+        }
+
+        const body = {
+            username: payload.username,
+            email: payload.email,
+        };
+
+        if (payload.new_password) {
+            if (!payload.current_password) {
+                alert("Le mot de passe actuel est requis pour modifier le mot de passe.");
+                return;
+            }
+            body.current_password = payload.current_password;
+            body.new_password = payload.new_password;
+        }
+
+        try {
+            await apiFetch(`/admins/${state.admin._id}`, {
+                method: "PUT",
+                body: JSON.stringify(body),
+            });
+            alert("Profil administrateur mis à jour.");
+            state.admin.username = body.username;
+            state.admin.email = body.email;
+            if (adminProfileForm) {
+                if (payload.new_password) {
+                    adminProfileForm.reset();
+                } else {
+                    adminProfileForm.elements.current_password.value = "";
+                    adminProfileForm.elements.new_password.value = "";
+                }
+            }
+            if (adminUsernameInput) {
+                adminUsernameInput.value = state.admin.username;
+            }
+            if (adminEmailInput) {
+                adminEmailInput.value = state.admin.email;
+            }
+            await loadAdmins();
+        } catch (error) {
+            alert("Impossible de mettre à jour le profil : " + error.message);
+        }
     });
 }
 
@@ -341,6 +500,10 @@ function renderAllTransactions(transactions) {
         descriptionCell.textContent = transaction.description ?? "";
         row.appendChild(descriptionCell);
 
+        if (state.highlightTransactionId && state.highlightTransactionId === transaction._id) {
+            row.classList.add("highlight");
+        }
+
         row.addEventListener("click", () => {
             closeNotificationPanel();
             state.highlightTransactionId = transaction._id;
@@ -352,6 +515,101 @@ function renderAllTransactions(transactions) {
     });
 
     allTransactionsTable.appendChild(fragment);
+}
+
+async function loadAdmins() {
+    if (!state.isAuthenticated) {
+        return;
+    }
+    try {
+        const admins = await apiFetch("/admins");
+        state.admins = Array.isArray(admins) ? admins : [];
+        state.adminsLoaded = true;
+
+        if (state.admin) {
+            const current = state.admins.find((item) => item._id === state.admin._id);
+            if (current) {
+                state.admin = current;
+                populateAdminProfileForm();
+            }
+        }
+
+        renderAdminTable();
+    } catch (error) {
+        console.error("Impossible de charger les administrateurs :", error);
+    }
+}
+
+function renderAdminTable() {
+    if (!adminTableBody) {
+        return;
+    }
+    adminTableBody.innerHTML = "";
+
+    const currentId = state.admin?._id;
+    const others = state.admins.filter((admin) => admin._id !== currentId);
+
+    if (adminCountEl) {
+        adminCountEl.textContent = `${others.length} administrateur(s)`;
+    }
+
+    if (!others.length) {
+        const row = document.createElement("tr");
+        const cell = document.createElement("td");
+        cell.colSpan = 5;
+        cell.className = "muted";
+        cell.textContent = "Aucun autre administrateur enregistré.";
+        row.appendChild(cell);
+        adminTableBody.appendChild(row);
+        return;
+    }
+
+    const fragment = document.createDocumentFragment();
+    others.forEach((admin) => {
+        const row = document.createElement("tr");
+
+        const usernameCell = document.createElement("td");
+        usernameCell.textContent = admin.username || admin.email || admin._id;
+        row.appendChild(usernameCell);
+
+        const emailCell = document.createElement("td");
+        emailCell.textContent = admin.email || "—";
+        row.appendChild(emailCell);
+
+        const roleCell = document.createElement("td");
+        roleCell.textContent = (admin.role || "admin").toUpperCase();
+        row.appendChild(roleCell);
+
+        const createdCell = document.createElement("td");
+        createdCell.textContent = admin.created_at ? formatDate(admin.created_at) : "—";
+        row.appendChild(createdCell);
+
+        const actionsCell = document.createElement("td");
+        actionsCell.className = "admin-table-actions";
+        const deleteBtn = document.createElement("button");
+        deleteBtn.type = "button";
+        deleteBtn.className = "secondary";
+        deleteBtn.dataset.adminId = admin._id;
+        deleteBtn.textContent = "Supprimer";
+        actionsCell.appendChild(deleteBtn);
+        row.appendChild(actionsCell);
+
+        fragment.appendChild(row);
+    });
+
+    adminTableBody.appendChild(fragment);
+}
+
+function populateAdminProfileForm() {
+    if (!adminProfileForm || !state.admin) {
+        return;
+    }
+    if (adminUsernameInput) {
+        adminUsernameInput.value = state.admin.username || "";
+    }
+    if (adminEmailInput) {
+        adminEmailInput.value = state.admin.email || "";
+    }
 }
 
 function getUserLabel(userId) {
@@ -405,6 +663,7 @@ async function handleLogin(event) {
 
         state.admin = response.admin;
         state.isAuthenticated = true;
+        populateAdminProfileForm();
 
         if (loginView) {
             loginView.classList.add("hidden");
@@ -438,8 +697,26 @@ function handleLogout() {
     state.allTransactionsFilters = { category: "", from: "", to: "" };
     state.allTransactionsSort = "date_desc";
     state.allTransactionsLoaded = false;
+    state.admins = [];
+    state.adminsLoaded = false;
     populateAllTransactionsCategoryFilter();
     syncAllTransactionsFilterInputs();
+    if (adminProfileForm) {
+        adminProfileForm.reset();
+    }
+    if (adminUsernameInput) {
+        adminUsernameInput.value = "";
+    }
+    if (adminEmailInput) {
+        adminEmailInput.value = "";
+    }
+    if (adminTableBody) {
+        adminTableBody.innerHTML =
+            '<tr><td colspan="5" class="muted">Aucun autre administrateur enregistré.</td></tr>';
+    }
+    if (adminCountEl) {
+        adminCountEl.textContent = "";
+    }
 
     renderUserList();
     renderTransactions([]);
@@ -468,7 +745,7 @@ function handleLogout() {
 
 async function initializeApp() {
     try {
-        await Promise.all([loadUsers(), loadCategories()]);
+        await Promise.all([loadUsers(), loadCategories(), loadAdmins()]);
         await loadNotifications();
     } catch (error) {
         console.error(error);
@@ -479,6 +756,7 @@ async function initializeApp() {
         setActiveSection(activeSection);
         syncUserSectionInteractivity();
         syncAllTransactionsFilterInputs();
+        populateAdminProfileForm();
     }
 }
 
@@ -956,6 +1234,7 @@ if (openAddTransactionButton) {
             const showCategories = section === "categories";
             const showReports = section === "reports";
             const showTransactions = section === "transactions";
+            const showAdmins = section === "admins";
 
             if (categorySection) {
                 categorySection.hidden = !showCategories;
@@ -966,6 +1245,9 @@ if (openAddTransactionButton) {
             if (transactionsSection) {
                 transactionsSection.hidden = !showTransactions;
             }
+            if (adminsSection) {
+                adminsSection.hidden = !showAdmins;
+            }
 
             syncUserSectionInteractivity();
 
@@ -973,6 +1255,15 @@ if (openAddTransactionButton) {
                 populateAllTransactionsCategoryFilter();
                 syncAllTransactionsFilterInputs();
                 loadAllTransactions().catch(console.error);
+            }
+
+            if (showAdmins) {
+                populateAdminProfileForm();
+                if (!state.adminsLoaded) {
+                    loadAdmins().catch(console.error);
+                } else {
+                    renderAdminTable();
+                }
             }
 
             if (showUsers) {

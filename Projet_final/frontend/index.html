@@ -50,6 +50,7 @@
                 <button type="button" data-section="categories">Catégories</button>
                 <button type="button" data-section="reports">Rapports</button>
                 <button type="button" data-section="transactions">Transactions</button>
+                <button type="button" data-section="admins">Administrateurs</button>
             </nav>
 
             <section id="user-overview" class="card">
@@ -198,6 +199,66 @@
                     </table>
                 </div>
             </section>
+
+            <section id="admins-section" class="card" hidden>
+                <header style="display:flex;justify-content:space-between;align-items:center;">
+                    <div>
+                        <h2>Administration</h2>
+                        <p class="muted">Gère ton profil administrateur et les autres comptes.</p>
+                    </div>
+                    <button id="open-add-admin">Créer un administrateur</button>
+                </header>
+
+                <div class="card" style="margin-top:1.25rem;">
+                    <h3>Mon profil</h3>
+                    <form id="admin-profile-form" class="admin-profile-form">
+                        <div class="form-grid">
+                            <label>Nom d'utilisateur
+                                <input type="text" name="username" id="admin-username" required>
+                            </label>
+                            <label>Email
+                                <input type="email" name="email" id="admin-email" required>
+                            </label>
+                        </div>
+                        <div class="form-grid">
+                            <label>Mot de passe actuel
+                                <input type="password" name="current_password" autocomplete="current-password" placeholder="Obligatoire pour changer le mot de passe">
+                            </label>
+                            <label>Nouveau mot de passe
+                                <input type="password" name="new_password" autocomplete="new-password" placeholder="Laisse vide pour conserver l'actuel">
+                            </label>
+                        </div>
+                        <div class="actions">
+                            <button type="submit">Mettre à jour</button>
+                        </div>
+                    </form>
+                </div>
+
+                <div class="card" style="margin-top:1.25rem;">
+                    <div style="display:flex;justify-content:space-between;align-items:center;">
+                        <h3>Autres administrateurs</h3>
+                        <span id="admin-count" class="muted"></span>
+                    </div>
+                    <div class="table-wrapper">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Nom d'utilisateur</th>
+                                    <th>Email</th>
+                                    <th>Rôle</th>
+                                    <th>Créé le</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="admin-table-body">
+                                <tr>
+                                    <td colspan="5" class="muted">Aucun autre administrateur enregistré.</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
         </main>
     </div>
 
@@ -292,6 +353,30 @@
             <div class="actions">
                 <button type="button" class="secondary" id="cancel-category">Annuler</button>
                 <button type="submit">Enregistrer</button>
+            </div>
+        </form>
+    </dialog>
+
+    <dialog id="admin-dialog">
+        <form id="admin-form">
+            <h2>Nouvel administrateur</h2>
+            <label>Nom d'utilisateur
+                <input type="text" name="username" required>
+            </label>
+            <label>Email
+                <input type="email" name="email" required>
+            </label>
+            <label>Mot de passe
+                <input type="password" name="password" required>
+            </label>
+            <label>Rôle
+                <select name="role">
+                    <option value="admin">Administrateur</option>
+                </select>
+            </label>
+            <div class="actions">
+                <button type="button" class="secondary" id="cancel-admin">Annuler</button>
+                <button type="submit">Créer</button>
             </div>
         </form>
     </dialog>

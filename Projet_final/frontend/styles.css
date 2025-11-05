@@ -140,6 +140,24 @@ select {
     min-height: 1.2rem;
 }
 
+.admin-profile-form {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+}
+
+.form-grid {
+    display: grid;
+    gap: 1rem;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+
+.admin-table-actions {
+    display: flex;
+    gap: 0.5rem;
+    justify-content: flex-end;
+}
+
 .app {
     display: flex;
     min-height: 100vh;
@@ -516,5 +534,9 @@ label {
 }
 
 .transactions-table tbody tr.highlight {
+    outline: 2px solid rgba(59, 130, 246, 0.6);
+}
+
+.global-transaction-row.highlight {
     outline: 2px solid rgba(59, 130, 246, 0.6);
 }
