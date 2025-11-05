@@ -89,6 +89,7 @@ Un script d'initialisation côté backend s’exécute au démarrage pour inject
 | Utilisateurs            | CRUD complet avec recalcul automatique des soldes et notifications lors des ajouts.          |
 | Transactions (profil)   | Ajout, modification, suppression ; mise en avant depuis une notification.                     |
 | Transactions (globales) | Vue consolidée avec tri par date/catégorie, filtres cumulables, clic pour ouvrir l’utilisateur.|
+| Administration          | Mise à jour du profil personnel, création et suppression d’administrateurs secondaires.        |
 | Catégories              | Gestion et réutilisation dans les filtres et formulaires.                                    |
 | Rapports financiers     | Génération par période avec historique consultable.                                           |
 | Notifications           | Panneau latéral (fermeture par clic extérieur, bouton, touche Échap) + badge d’indication.   |
@@ -206,7 +207,9 @@ volumes:
 
 ## 10. Améliorations futures
 
-- Ajout d’un système d’authentification multi-utilisateur.
+- Pour l’instant, tous les administrateurs peuvent créer et supprimer d’autres comptes. L’objectif, à terme, est d’introduire un super administrateur disposant de ces droits, tandis que les administrateurs classiques seraient limités.
+- À l’avenir, nous pourrions aussi permettre à chaque utilisateur de consulter ses propres données personnelles
+- Nous pourrions également gérer plusieurs entités financières, chacune avec son propre ensemble d’utilisateurs isolé des autres.
 - Exportation des rapports au format PDF.
 - Intégration de graphiques interactifs (Chart.js).
 - Optimisation du cache Redis pour les statistiques temps réel.
