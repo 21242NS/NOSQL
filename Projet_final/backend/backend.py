@@ -14,7 +14,7 @@ import re # For regex operations
 
 
 # MongoDB connection setup
-uri = "mongodb://mongo:27017/financialdb"
+uri = os.environ.get("MONGODB_URI", "mongodb://mongo:27017/financialdb")
 client = MongoClient(uri, server_api=ServerApi('1'))
 app = Flask(__name__)
 CORS(app, resources={r"/api/*": {"origins": "*"}})
